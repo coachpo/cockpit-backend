@@ -3,12 +3,15 @@ force-model-prefix: false
 request-log: true
 api-keys: []
 passthrough-headers: false
-streaming: {}
+streaming:
+  keepalive-seconds: 15
+  bootstrap-retries: 2
+nonstream-keepalive-interval: 0
 host: ""
 port: 8317
 remote-management:
-    allow-remote: false
-    secret-key: $2a$10$bEl6zYq2iU9Oc.ldhEfSW.J/ldu4zyBIWjEnXB1Awf/lSCsfjxVme
+  allow-remote: false
+  secret-key: $2a$10$bEl6zYq2iU9Oc.ldhEfSW.J/ldu4zyBIWjEnXB1Awf/lSCsfjxVme
 auth-dir: /home/qing/.cockpit
 debug: false
 disable-cooling: false
@@ -16,19 +19,52 @@ request-retry: 3
 max-retry-credentials: 0
 max-retry-interval: 30
 quota-exceeded:
-    switch-project: true
-    switch-preview-model: true
+  switch-project: true
+  switch-preview-model: true
 routing:
-    strategy: round-robin
+  strategy: round-robin
 ws-auth: false
-codex-api-key: []
+codex-api-key:
+  - api-key: sk-codex-example
+    priority: 100
+    prefix: team-a
+    base-url: https://api.openai.com/v1
+    websockets: true
+    proxy-url: ""
+    models:
+      - name: gpt-5-codex
+        alias: team-a/gpt-5-codex
+    headers:
+      openai-organization: org-example
+    excluded-models:
+      - gpt-4.1
 codex-header-defaults:
-    user-agent: ""
-    beta-features: ""
-openai-compatibility: []
+  user-agent: ""
+  beta-features: ""
+openai-compatibility:
+  - name: example-provider
+    priority: 50
+    prefix: vendor
+    base-url: https://example-openai-compatible.invalid/v1
+    api-key-entries:
+      - api-key: sk-provider-example
+        proxy-url: ""
+    models:
+      - name: provider-model
+        alias: vendor/provider-model
+    headers:
+      x-provider-version: "2026-01-01"
+oauth-excluded-models:
+  codex:
+    - gpt-4.1
+oauth-model-alias:
+  codex:
+    - name: gpt-5-codex
+      alias: gpt-5-codex-stable
+      fork: true
 payload:
-    default: []
-    default-raw: []
-    override: []
-    override-raw: []
-    filter: []
+  default: []
+  default-raw: []
+  override: []
+  override-raw: []
+  filter: []
