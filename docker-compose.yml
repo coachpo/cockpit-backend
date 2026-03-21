@@ -13,15 +13,8 @@ services:
     restart: unless-stopped
 
   cockpit:
-    image: ${COCKPIT_IMAGE:-${CLI_PROXY_IMAGE:-coachpo/cockpit:latest}}
+    image: ${COCKPIT_IMAGE:-ghcr.io/coachpo/cockpit-backend:latest}
     pull_policy: always
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VERSION: ${VERSION:-dev}
-        COMMIT: ${COMMIT:-none}
-        BUILD_DATE: ${BUILD_DATE:-unknown}
     container_name: cockpit
     depends_on:
       - nacos
