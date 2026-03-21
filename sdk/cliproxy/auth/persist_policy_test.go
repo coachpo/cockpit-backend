@@ -1,0 +1,89 @@
+package auth
+
+import (
+	"context"
+	"sync/atomic"
+	"testing"
+)
+
+type countingStore struct {
+	saveCount   atomic.Int32
+	deleteCount atomic.Int32
+}
+
+func (s *countingStore) List(context.Context) ([]*Auth, error) { return nil, nil }
+
+func (s *countingStore) Save(context.Context, *Auth) (string, error) {
+	s.saveCount.Add(1)
+	return "", nil
+}
+
+func (s *countingStore) Delete(context.Context, string) error {
+	s.deleteCount.Add(1)
+	return nil
+}
+
+func TestWithSkipPersist_DisablesUpdatePersistence(t *testing.T) {
+	store := &countingStore{}
+	mgr := NewManager(store, nil, nil)
+	auth := &Auth{
+		ID:       "auth-1",
+		Provider: "codex",
+		Metadata: map[string]any{"type": "codex"},
+	}
+
+	if _, err := mgr.Update(context.Background(), auth); err != nil {
+		t.Fatalf("Update returned error: %v", err)
+	}
+	if got := store.saveCount.Load(); got != 1 {
+		t.Fatalf("expected 1 Save call, got %d", got)
+	}
+
+	ctxSkip := WithSkipPersist(context.Background())
+	if _, err := mgr.Update(ctxSkip, auth); err != nil {
+		t.Fatalf("Update(skipPersist) returned error: %v", err)
+	}
+	if got := store.saveCount.Load(); got != 1 {
+		t.Fatalf("expected Save call count to remain 1, got %d", got)
+	}
+}
+
+func TestWithSkipPersist_DisablesRegisterPersistence(t *testing.T) {
+	store := &countingStore{}
+	mgr := NewManager(store, nil, nil)
+	auth := &Auth{
+		ID:       "auth-1",
+		Provider: "codex",
+		Metadata: map[string]any{"type": "codex"},
+	}
+
+	if _, err := mgr.Register(WithSkipPersist(context.Background()), auth); err != nil {
+		t.Fatalf("Register(skipPersist) returned error: %v", err)
+	}
+	if got := store.saveCount.Load(); got != 0 {
+		t.Fatalf("expected 0 Save calls, got %d", got)
+	}
+}
+
+func TestWithSkipPersist_DisablesUnregisterPersistence(t *testing.T) {
+	store := &countingStore{}
+	mgr := NewManager(store, nil, nil)
+	auth := &Auth{
+		ID:       "auth-1",
+		Provider: "codex",
+		Metadata: map[string]any{"type": "codex"},
+	}
+
+	if _, err := mgr.Register(WithSkipPersist(context.Background()), auth); err != nil {
+		t.Fatalf("Register(skipPersist) returned error: %v", err)
+	}
+
+	mgr.Unregister(WithSkipPersist(context.Background()), auth.ID)
+
+	if _, ok := mgr.GetByID(auth.ID); ok {
+		t.Fatal("expected unregister to remove auth from manager")
+	}
+	if got := store.deleteCount.Load(); got != 0 {
+		t.Fatalf("expected 0 Delete calls, got %d", got)
+	}
+}

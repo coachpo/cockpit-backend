@@ -1,0 +1,34 @@
+proxy-url: ""
+force-model-prefix: false
+request-log: true
+api-keys: []
+passthrough-headers: false
+streaming: {}
+host: ""
+port: 8317
+remote-management:
+    allow-remote: false
+    secret-key: $2a$10$bEl6zYq2iU9Oc.ldhEfSW.J/ldu4zyBIWjEnXB1Awf/lSCsfjxVme
+auth-dir: /home/qing/.cockpit
+debug: false
+disable-cooling: false
+request-retry: 3
+max-retry-credentials: 0
+max-retry-interval: 30
+quota-exceeded:
+    switch-project: true
+    switch-preview-model: true
+routing:
+    strategy: round-robin
+ws-auth: false
+codex-api-key: []
+codex-header-defaults:
+    user-agent: ""
+    beta-features: ""
+openai-compatibility: []
+payload:
+    default: []
+    default-raw: []
+    override: []
+    override-raw: []
+    filter: []

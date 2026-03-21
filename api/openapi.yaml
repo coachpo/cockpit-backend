@@ -1,0 +1,1570 @@
+openapi: 3.0.3
+info:
+  title: Cockpit Management API
+  version: 6.0.0
+  description: Management API for Cockpit v6 proxy and SDK.
+servers:
+  - url: /v0/management
+    description: Local management server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+    ManagementKeyHeader:
+      type: apiKey
+      in: header
+      name: X-Management-Key
+
+  schemas:
+    Config:
+      type: object
+      description: Full configuration object.
+      additionalProperties: true
+
+    StatusOk:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+    CodexKey:
+      type: object
+      properties:
+        api-key:
+          type: string
+        priority:
+          type: integer
+        prefix:
+          type: string
+        base-url:
+          type: string
+        websockets:
+          type: boolean
+        proxy-url:
+          type: string
+        models:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              alias:
+                type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        excluded-models:
+          type: array
+          items:
+            type: string
+
+    OpenAICompatibility:
+      type: object
+      properties:
+        name:
+          type: string
+        priority:
+          type: integer
+        prefix:
+          type: string
+        base-url:
+          type: string
+        api-key-entries:
+          type: array
+          items:
+            type: object
+            properties:
+              api-key:
+                type: string
+              proxy-url:
+                type: string
+        models:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              alias:
+                type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    OAuthModelAlias:
+      type: object
+      properties:
+        name:
+          type: string
+        alias:
+          type: string
+        fork:
+          type: boolean
+
+    AuthFile:
+      type: object
+      properties:
+        id:
+          type: string
+        auth_index:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        provider:
+          type: string
+        label:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+        status_message:
+          type: string
+        disabled:
+          type: boolean
+        unavailable:
+          type: boolean
+        runtime_only:
+          type: boolean
+        source:
+          type: string
+          enum: [nacos, file, memory]
+        size:
+          type: integer
+        modtime:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_refresh:
+          type: string
+          format: date-time
+        priority:
+          type: integer
+        note:
+          type: string
+
+    ModelDefinition:
+      type: object
+      properties:
+        id:
+          type: string
+        display_name:
+          type: string
+        type:
+          type: string
+        owned_by:
+          type: string
+
+security:
+  - BearerAuth: []
+  - ManagementKeyHeader: []
+
+paths:
+  /config:
+    get:
+      summary: Get full config
+      responses:
+        '200':
+          description: Full config as JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+  /config.yaml:
+    get:
+      summary: Get raw YAML config
+      responses:
+        '200':
+          description: Raw YAML config file
+          content:
+            application/yaml:
+              schema:
+                type: string
+    put:
+      summary: Replace YAML config
+      requestBody:
+        required: true
+        content:
+          application/yaml:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Config replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  changed:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Invalid YAML
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Write failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /latest-version:
+    get:
+      summary: Check latest version
+      responses:
+        '200':
+          description: Latest version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  latest-version:
+                    type: string
+        '502':
+          description: GitHub API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /debug:
+    get:
+      summary: Get debug mode
+      responses:
+        '200':
+          description: Debug mode status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  debug:
+                    type: boolean
+    put:
+      summary: Set debug mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set debug mode (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /request-log:
+    get:
+      summary: Get request log mode
+      responses:
+        '200':
+          description: Request log status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request-log:
+                    type: boolean
+    put:
+      summary: Set request log mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set request log mode (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /proxy-url:
+    get:
+      summary: Get global proxy URL
+      responses:
+        '200':
+          description: Proxy URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  proxy-url:
+                    type: string
+    put:
+      summary: Set proxy URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set proxy URL (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    delete:
+      summary: Clear proxy URL
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /ws-auth:
+    get:
+      summary: Get websocket auth toggle
+      responses:
+        '200':
+          description: Websocket auth status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ws-auth:
+                    type: boolean
+    put:
+      summary: Set websocket auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set websocket auth (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /request-retry:
+    get:
+      summary: Get retry count
+      responses:
+        '200':
+          description: Retry count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request-retry:
+                    type: integer
+    put:
+      summary: Set retry count
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: integer
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set retry count (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: integer
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /max-retry-interval:
+    get:
+      summary: Get max retry interval
+      responses:
+        '200':
+          description: Max retry interval in seconds
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  max-retry-interval:
+                    type: integer
+    put:
+      summary: Set max retry interval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: integer
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set max retry interval (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: integer
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /force-model-prefix:
+    get:
+      summary: Get force model prefix toggle
+      responses:
+        '200':
+          description: Force model prefix status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  force-model-prefix:
+                    type: boolean
+    put:
+      summary: Set force model prefix
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set force model prefix (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /routing/strategy:
+    get:
+      summary: Get routing strategy
+      responses:
+        '200':
+          description: Routing strategy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  strategy:
+                    type: string
+                    enum: [round-robin, fill-first]
+    put:
+      summary: Set routing strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+                  enum: [round-robin, fill-first]
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+        '400':
+          description: Invalid strategy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      summary: Set routing strategy (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+                  enum: [round-robin, fill-first]
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+        '400':
+          description: Invalid strategy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api-keys:
+    get:
+      summary: Get API keys
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api-keys:
+                    type: array
+                    items:
+                      type: string
+    put:
+      summary: Replace all API keys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Update single API key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    old:
+                      type: string
+                    new:
+                      type: string
+                - type: object
+                  properties:
+                    index:
+                      type: integer
+                    value:
+                      type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    delete:
+      summary: Delete API key
+      parameters:
+        - in: query
+          name: index
+          schema:
+            type: integer
+        - in: query
+          name: value
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /codex-api-key:
+    get:
+      summary: Get Codex API keys
+      responses:
+        '200':
+          description: List of Codex keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codex-api-key:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CodexKey'
+    put:
+      summary: Replace all Codex keys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/CodexKey'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/CodexKey'
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Update single Codex key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                index:
+                  type: integer
+                match:
+                  type: string
+                value:
+                  $ref: '#/components/schemas/CodexKey'
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete Codex key
+      parameters:
+        - in: query
+          name: api-key
+          schema:
+            type: string
+        - in: query
+          name: index
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /openai-compatibility:
+    get:
+      summary: Get OpenAI compatibility settings
+      responses:
+        '200':
+          description: List of OpenAI compatibility entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  openai-compatibility:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OpenAICompatibility'
+    put:
+      summary: Replace all OpenAI compatibility entries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/OpenAICompatibility'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/OpenAICompatibility'
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Update single OpenAI compatibility entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                index:
+                  type: integer
+                value:
+                  $ref: '#/components/schemas/OpenAICompatibility'
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete OpenAI compatibility entry
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+        - in: query
+          name: index
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /oauth-excluded-models:
+    get:
+      summary: Get OAuth excluded models
+      responses:
+        '200':
+          description: OAuth excluded models map
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  oauth-excluded-models:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string
+    put:
+      summary: Replace all OAuth excluded models
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+                - type: object
+                  properties:
+                    items:
+                      type: object
+                      additionalProperties:
+                        type: array
+                        items:
+                          type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set OAuth excluded models per provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider:
+                  type: string
+                models:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    delete:
+      summary: Delete OAuth excluded models for provider
+      parameters:
+        - in: query
+          name: provider
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth-model-alias:
+    get:
+      summary: Get OAuth model aliases
+      responses:
+        '200':
+          description: OAuth model aliases map
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  oauth-model-alias:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/OAuthModelAlias'
+    put:
+      summary: Replace all OAuth model aliases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OAuthModelAlias'
+                - type: object
+                  properties:
+                    items:
+                      type: object
+                      additionalProperties:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OAuthModelAlias'
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set OAuth model aliases per channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  type: string
+                provider:
+                  type: string
+                aliases:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/OAuthModelAlias'
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    delete:
+      summary: Delete OAuth model aliases for channel
+      parameters:
+        - in: query
+          name: channel
+          schema:
+            type: string
+        - in: query
+          name: provider
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /quota-exceeded/switch-project:
+    get:
+      summary: Get switch project on quota exceeded toggle
+      responses:
+        '200':
+          description: Switch project status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  switch-project:
+                    type: boolean
+    put:
+      summary: Set switch project on quota exceeded
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set switch project on quota exceeded (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /quota-exceeded/switch-preview-model:
+    get:
+      summary: Get switch preview model on quota exceeded toggle
+      responses:
+        '200':
+          description: Switch preview model status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  switch-preview-model:
+                    type: boolean
+    put:
+      summary: Set switch preview model on quota exceeded
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    patch:
+      summary: Set switch preview model on quota exceeded (alias)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /auth-files:
+    get:
+      summary: List all auth files
+      responses:
+        '200':
+          description: List of auth files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuthFile'
+    post:
+      summary: Upload/create auth file
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw JSON auth payload
+              additionalProperties: true
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+    delete:
+      summary: Delete auth file(s)
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+        - in: query
+          name: all
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  deleted:
+                    type: integer
+
+  /auth-files/models:
+    get:
+      summary: Get models for specific auth file
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModelDefinition'
+
+  /auth-files/download:
+    get:
+      summary: Download auth JSON file
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Auth JSON file
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="file.json"
+
+  /auth-files/status:
+    patch:
+      summary: Toggle disabled state of auth file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                disabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  disabled:
+                    type: boolean
+
+  /auth-files/fields:
+    patch:
+      summary: Update editable fields of auth file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                prefix:
+                  type: string
+                proxy_url:
+                  type: string
+                priority:
+                  type: integer
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+
+  /model-definitions/{channel}:
+    get:
+      summary: Get static model catalog by channel
+      parameters:
+        - in: path
+          name: channel
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: channel
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Model catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channel:
+                    type: string
+                  models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModelDefinition'
+        '400':
+          description: Unknown channel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api-call:
+    post:
+      summary: Proxy-aware upstream HTTP call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auth_index:
+                  type: string
+                method:
+                  type: string
+                  example: GET
+                url:
+                  type: string
+                  example: https://api.example.com/v1/ping
+                header:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  example:
+                    Authorization: Bearer $TOKEN$
+                data:
+                  type: string
+      responses:
+        '200':
+          description: API call response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status_code:
+                    type: integer
+                  header:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string
+                  body:
+                    type: string
+
+  /codex-auth-url:
+    get:
+      summary: Initiate Codex OAuth flow
+      parameters:
+        - in: query
+          name: is_webui
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: OAuth URL and state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  url:
+                    type: string
+                  state:
+                    type: string
+
+  /oauth-callback:
+    post:
+      summary: Receive OAuth callback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider:
+                  type: string
+                code:
+                  type: string
+                state:
+                  type: string
+                redirect_url:
+                  type: string
+                error:
+                  type: string
+      responses:
+        '200':
+          description: Status OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  error:
+                    type: string
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  error:
+                    type: string
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  error:
+                    type: string
+
+  /get-auth-status:
+    get:
+      summary: Check OAuth flow status
+      parameters:
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OAuth status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, wait, error]
+                  error:
+                    type: string

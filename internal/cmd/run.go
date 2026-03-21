@@ -1,0 +1,88 @@
+// Package cmd provides command-line interface functionality for the Cockpit server.
+// It includes authentication flows for various AI service providers, service startup,
+// and other command-line operations.
+package cmd
+
+import (
+	"context"
+	"errors"
+	"os/signal"
+	"syscall"
+
+	"github.com/coachpo/cockpit-backend/internal/config"
+	"github.com/coachpo/cockpit-backend/internal/nacos"
+	"github.com/coachpo/cockpit-backend/sdk/cliproxy"
+	log "github.com/sirupsen/logrus"
+)
+
+// StartService builds and runs the proxy service using the exported SDK.
+// It creates a new proxy service instance, sets up signal handling for graceful shutdown,
+// and starts the service with the provided configuration.
+//
+// Parameters:
+//   - cfg: The application configuration
+//   - configPath: The path to the configuration file
+func StartService(cfg *config.Config, configPath string, configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) {
+	builder := cliproxy.NewBuilder().
+		WithConfig(cfg).
+		WithConfigPath(configPath).
+		WithConfigSource(configSource).
+		WithAuthStore(authStore)
+
+	ctxSignal, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	service, err := builder.Build()
+	if err != nil {
+		log.Errorf("failed to build proxy service: %v", err)
+		return
+	}
+
+	err = service.Run(ctxSignal)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		log.Errorf("proxy service exited with error: %v", err)
+	}
+}
+
+// StartServiceBackground starts the proxy service in a background goroutine
+// and returns a cancel function for shutdown and a done channel.
+func StartServiceBackground(cfg *config.Config, configPath string, configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (cancel func(), done <-chan struct{}) {
+	builder := cliproxy.NewBuilder().
+		WithConfig(cfg).
+		WithConfigPath(configPath).
+		WithConfigSource(configSource).
+		WithAuthStore(authStore)
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	doneCh := make(chan struct{})
+
+	service, err := builder.Build()
+	if err != nil {
+		log.Errorf("failed to build proxy service: %v", err)
+		close(doneCh)
+		return cancelFn, doneCh
+	}
+
+	go func() {
+		defer close(doneCh)
+		if err := service.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			log.Errorf("proxy service exited with error: %v", err)
+		}
+	}()
+
+	return cancelFn, doneCh
+}
+
+// WaitForCloudDeploy waits indefinitely for shutdown signals in cloud deploy mode
+// when no configuration file is available.
+func WaitForCloudDeploy() {
+	// Clarify that we are intentionally idle for configuration and not running the API server.
+	log.Info("Cloud deploy mode: No config found; standing by for configuration. API server is not started. Press Ctrl+C to exit.")
+
+	ctxSignal, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	// Block until shutdown signal is received
+	<-ctxSignal.Done()
+	log.Info("Cloud deploy mode: Shutdown signal received; exiting")
+}
