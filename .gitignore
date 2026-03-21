@@ -1,5 +1,5 @@
 # Binaries
-cockpit
+/cockpit
 *.exe
 test-output
 
