@@ -6,7 +6,7 @@ Parent: `./AGENTS.md`
 Checked-in binaries only. This tree currently ships the `cockpit` main binary.
 
 ## WHERE TO LOOK
-- `cockpit/main.go`: flags, build metadata, `.env` load, Nacos/static bootstrap, login modes, and service dispatch.
+- `cockpit/main.go`: flags, build metadata, `.env` load, Nacos/static bootstrap, cloud standby, and service dispatch.
 
 ## LOCAL CONVENTIONS
 - Linker-injected build metadata lives in `cockpit/main.go`: `Version`, `Commit`, `BuildDate`.

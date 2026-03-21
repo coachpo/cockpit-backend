@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-03-21T17:10:31+02:00
-**Commit:** 1a0acb51
+**Generated:** 2026-03-21T23:19:20+02:00
+**Commit:** 4deb29c
 **Branch:** main
 
 ## OVERVIEW
@@ -31,7 +31,7 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 | Task | Location | Notes |
 |------|----------|-------|
 | Start the binary | `cmd/cockpit/main.go` | flags, `.env` load, cloud deploy detection, Nacos/static bootstrap, service handoff |
-| CLI login + startup helpers | `internal/cmd/` | `StartService`, browser/device login, prompt handling, cloud standby |
+| Service startup helpers | `internal/cmd/` | `StartService`, `StartServiceBackground`, and cloud standby |
 | Built-in request access wiring | `internal/access/` | reconciles config API keys into the `sdk/access` manager |
 | Config/auth backends | `internal/nacos/` | remote Nacos stores plus static file-backed fallbacks |
 | HTTP routing + management | `internal/api/server.go` | `/v1*` routes, websocket attachment, lazy `/v0/management` enablement |
@@ -106,14 +106,15 @@ docker compose build --build-arg VERSION="..." --build-arg COMMIT="..." --build-
 - Websocket relay traffic moves through typed message envelopes keyed by request ID.
 
 ## STALE OR PRUNED AREAS
-- This checkout has no tracked `README.md`, `README_CN.md`, `.github/workflows/`, or `.goreleaser.yml`; do not point contributors at them without re-adding them.
+- This checkout has no tracked `README.md`, `README_CN.md`, or `.goreleaser.yml`; do not point contributors at them without re-adding them.
+- Backend CI does exist under `.github/workflows/ci.yml`; keep service-local checks there rather than moving them to the meta-repo root.
 - `docs/` is ignored by `.gitignore`; treat it as scratch output, not canonical documentation.
 - `examples/` is gone.
 - Recent cleanup commits removed placeholder auth providers, `sdk/cliproxy/usage`, `sdk/translator/builtin`, and legacy executor helpers like `cloak_*` and `user_id_cache.go`.
 - `docker-build.sh` no longer supports `--with-usage`; do not reintroduce usage preservation without restoring a matching management API surface.
 
 ## NOTES
-- `cmd/cockpit/main.go` loads `.env`, resolves Nacos vs static config/auth stores, configures logging, resolves auth dir, registers access providers, then branches into login or service startup.
+- `cmd/cockpit/main.go` loads `.env`, resolves Nacos vs static config/auth stores, configures logging, resolves auth dir, registers access providers, then waits for cloud config or starts the proxy service.
 - `Dockerfile` injects `Version`, `Commit`, and `BuildDate` into `cmd/cockpit/main.go`; keep container build path aligned with the binary directory.
 - `test/thinking_conversion_test.go` is intentionally large. Extend the existing matrix instead of starting parallel styles.
 - `test/nacos_integration_test.go` is a live smoke test gated by `COCKPIT_NACOS_SMOKE=1` plus Nacos credentials.

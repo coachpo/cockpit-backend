@@ -10,7 +10,7 @@ Private implementation tree. API routing, config/auth backends, model registry, 
 - `api/`: Gin server, route registration, websocket attachment, management routes.
 - `auth/`: private provider auth flows; current checked-in provider is Codex.
 - `browser/`, `buildinfo/`, `constant/`, `interfaces/`, `misc/`: small support leaves for browser launch, build metadata, provider constants, shared contracts, and focused helpers.
-- `cmd/`: service startup and CLI login helpers used by `cmd/cockpit`.
+- `cmd/`: service startup helpers and cloud-deploy standby used by `cmd/cockpit`.
 - `config/`: split config schema, load flow, and sanitization.
 - `logging/`: base logrus setup, Gin request logging, and request IDs.
 - `nacos/`: remote/static config and auth backends shared by bootstrap and watcher code.
@@ -26,7 +26,7 @@ Private implementation tree. API routing, config/auth backends, model registry, 
 - A provider-facing change often requires coordinated edits across `access/`, `config/`, `watcher/`, `runtime/executor/`, and `sdk/cliproxy/auth/`.
 - Request-access updates belong in `access/` plus `sdk/access/`; do not register providers from API handlers or executors.
 - Nacos-backed config/auth wiring belongs in `nacos/`, `cmd/`, `watcher/`, and `sdk/cliproxy/`; do not hide it in ad hoc helpers.
-- CLI login and startup behavior belongs in `cmd/`; HTTP routing and management belong in `api/`.
+- CLI startup behavior belongs in `cmd/`; HTTP routing and management belong in `api/`.
 - Favor subsystem-local helpers over new global utility dumping grounds. If a helper only serves logging or shared utility code, check `logging/AGENTS.md` or `util/AGENTS.md` first.
 - Keep `browser/`, `buildinfo/`, `constant/`, `interfaces/`, and `misc/` as narrow support leaves instead of turning them into new subsystem dumping grounds.
 - If a folder has its own child `AGENTS.md`, switch to that file for detailed rules.
