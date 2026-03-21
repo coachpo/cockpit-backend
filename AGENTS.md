@@ -20,9 +20,8 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 |- temp/                # tracked runtime stats output under `temp/stats/`
 |- config.example.yaml  # config-key inventory
 |- .env.example         # env var starter file
-|- Dockerfile           # container build with ldflags metadata injection
+|- Dockerfile           # container build for the cockpit binary
 |- docker-compose.yml   # local Nacos + Cockpit stack
-|- docker-build.sh      # interactive docker workflow
 |- .sisyphus/plans/     # local planning notes used during deep work
 `- docs/                # gitignored scratch tree, not checked-in user docs
 ```
@@ -74,8 +73,8 @@ go test ./...
 go test ./internal/...
 go test ./sdk/...
 go test ./test/...
-docker compose up -d --remove-orphans --no-build
-docker compose build --build-arg VERSION="..." --build-arg COMMIT="..." --build-arg BUILD_DATE="..."
+docker compose pull
+docker compose up -d --remove-orphans
 ```
 
 ## REPO-WIDE CONVENTIONS
@@ -111,11 +110,11 @@ docker compose build --build-arg VERSION="..." --build-arg COMMIT="..." --build-
 - `docs/` is ignored by `.gitignore`; treat it as scratch output, not canonical documentation.
 - `examples/` is gone.
 - Recent cleanup commits removed placeholder auth providers, `sdk/cliproxy/usage`, `sdk/translator/builtin`, and legacy executor helpers like `cloak_*` and `user_id_cache.go`.
-- `docker-build.sh` no longer supports `--with-usage`; do not reintroduce usage preservation without restoring a matching management API surface.
 
 ## NOTES
 - `cmd/cockpit/main.go` loads `.env`, resolves Nacos vs static config/auth stores, configures logging, resolves auth dir, registers access providers, then waits for cloud config or starts the proxy service.
-- `Dockerfile` injects `Version`, `Commit`, and `BuildDate` into `cmd/cockpit/main.go`; keep container build path aligned with the binary directory.
+- `Dockerfile` builds `cmd/cockpit` directly; keep container build path aligned with the binary directory.
+- `docker-compose.yml` defaults to the GHCR backend image published by the root `docker-images.yml` workflow; override `COCKPIT_IMAGE` only when intentionally testing a different image.
 - `test/thinking_conversion_test.go` is intentionally large. Extend the existing matrix instead of starting parallel styles.
 - `test/nacos_integration_test.go` is a live smoke test gated by `COCKPIT_NACOS_SMOKE=1` plus Nacos credentials.
 - `internal/wsrelay/` is wired from `sdk/cliproxy/service.go`; keep relay work scoped there instead of reviving removed API scaffolding.
