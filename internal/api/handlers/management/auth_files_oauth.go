@@ -251,6 +251,11 @@ func (h *Handler) completeCodexOAuthFlow(ctx context.Context, state string, pkce
 		log.Errorf("Failed to save authentication tokens: %v", errSave)
 		return
 	}
+	if errUpsert := h.upsertManagedAuth(ctx, record); errUpsert != nil {
+		SetOAuthSessionError(state, "Failed to activate authentication tokens")
+		log.Errorf("Failed to update runtime auth manager: %v", errUpsert)
+		return
+	}
 	fmt.Printf("Authentication successful! Token saved to %s\n", savedPath)
 	if bundle.APIKey != "" {
 		fmt.Println("API key obtained and saved")

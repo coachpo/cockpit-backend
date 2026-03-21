@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
@@ -16,8 +17,10 @@ import (
 )
 
 type StaticConfigSource struct {
-	path   string
-	config *config.Config
+	path     string
+	config   *config.Config
+	mu       sync.RWMutex
+	onChange func(*config.Config)
 }
 
 func NewStaticConfigSource(path string) *StaticConfigSource {
@@ -29,7 +32,9 @@ func (s *StaticConfigSource) LoadConfig() (*config.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.mu.Lock()
 	s.config = cfg
+	s.mu.Unlock()
 	return cfg, nil
 }
 
@@ -61,13 +66,32 @@ func (s *StaticConfigSource) SaveConfig(cfg *config.Config) error {
 		return fmt.Errorf("static config store: write config: %w", err)
 	}
 
+	s.mu.Lock()
 	s.config = persistCfg
+	onChange := s.onChange
+	s.mu.Unlock()
+	if onChange != nil {
+		onChange(persistCfg)
+	}
 	return nil
 }
 
-func (s *StaticConfigSource) WatchConfig(_ func(*config.Config)) error { return nil }
+func (s *StaticConfigSource) WatchConfig(onChange func(*config.Config)) error {
+	s.mu.Lock()
+	s.onChange = onChange
+	current := s.config
+	s.mu.Unlock()
+	if onChange != nil && current != nil {
+		onChange(current)
+	}
+	return nil
+}
 
-func (s *StaticConfigSource) StopWatch() {}
+func (s *StaticConfigSource) StopWatch() {
+	s.mu.Lock()
+	s.onChange = nil
+	s.mu.Unlock()
+}
 
 func (s *StaticConfigSource) Mode() string { return "static" }
 
