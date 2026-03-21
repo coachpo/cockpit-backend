@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	configaccess "github.com/coachpo/cockpit-backend/internal/access/config_access"
 	"github.com/coachpo/cockpit-backend/internal/buildinfo"
@@ -25,11 +26,12 @@ import (
 )
 
 var (
-	Version           = "dev"
-	Commit            = "none"
-	BuildDate         = "unknown"
-	DefaultConfigPath = ""
+	Version   = "dev"
+	Commit    = "none"
+	BuildDate = "unknown"
 )
+
+const configPathUsage = "Path to the YAML config file (defaults to ./config.yaml)"
 
 // init initializes the shared logger setup.
 func init() {
@@ -43,32 +45,25 @@ func warnIfUsingLocalStaticMode(configSource nacos.ConfigSource, configFilePath 
 	if configSource == nil || configSource.Mode() != "static" {
 		return
 	}
-	log.Warnf("Running in local static file mode using %q; local config file changes are not watched. Set NACOS_ADDR to enable live config reloads.", configFilePath)
+	log.Infof("Running in local static file mode using %q; local config file changes are not watched. Set NACOS_ADDR to enable live config reloads.", configFilePath)
 }
 
-// main is the entry point of the application.
-// It parses command-line flags, loads configuration, and starts the appropriate
-// service based on the provided flags (login, codex-login, or server mode).
-func main() {
-	fmt.Printf("Cockpit Version: %s, Commit: %s, BuiltAt: %s\n", buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate)
-
-	// Command-line flags to control the application's behavior.
-	var configPath string
-
-	// Define command-line flags for different operation modes.
-	flag.StringVar(&configPath, "config", DefaultConfigPath, "Static config file path (ignored when NACOS_ADDR is set)")
-
-	flag.CommandLine.Usage = func() {
-		out := flag.CommandLine.Output()
-		_, _ = fmt.Fprintf(out, "Usage of %s\n", os.Args[0])
-		flag.CommandLine.VisitAll(func(f *flag.Flag) {
+func newCommandFlagSet(name string) *flag.FlagSet {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.String("config", "", configPathUsage)
+	fs.Usage = func() {
+		out := fs.Output()
+		_, _ = fmt.Fprintf(out, "Usage of %s\n", name)
+		hasFlags := false
+		fs.VisitAll(func(f *flag.Flag) {
+			hasFlags = true
 			s := fmt.Sprintf("  -%s", f.Name)
-			name, unquoteUsage := flag.UnquoteUsage(f)
-			if name != "" {
-				s += " " + name
+			usageName, unquoteUsage := flag.UnquoteUsage(f)
+			if usageName != "" {
+				s += " " + usageName
 			}
 			if len(s) <= 4 {
-				s += "	"
+				s += "\t"
 			} else {
 				s += "\n    "
 			}
@@ -80,15 +75,145 @@ func main() {
 			}
 			_, _ = fmt.Fprint(out, s+"\n")
 		})
+		if !hasFlags {
+			_, _ = fmt.Fprintln(out, "  (no command-line flags)")
+		}
+	}
+	return fs
+}
+
+func parseCommandArgs(name string, args []string) (string, error) {
+	fs := newCommandFlagSet(name)
+	if err := fs.Parse(args); err != nil {
+		return "", err
+	}
+	if fs.NArg() > 0 {
+		return "", fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	if configPathFlag := fs.Lookup("config"); configPathFlag != nil {
+		return strings.TrimSpace(configPathFlag.Value.String()), nil
+	}
+	return "", nil
+}
+
+type bootstrapConfig struct {
+	cfg          *config.Config
+	configSource nacos.ConfigSource
+	authStore    nacos.WatchableAuthStore
+}
+
+type bootstrapLoaders struct {
+	nacosAddr  string
+	loadNacos  func() (*bootstrapConfig, error)
+	loadStatic func(configFilePath string) (*bootstrapConfig, error)
+}
+
+func resolveBootstrapConfig(configFilePath string, loaders bootstrapLoaders) (*bootstrapConfig, error) {
+	if loaders.loadNacos == nil {
+		loaders.loadNacos = loadNacosBootstrapConfig
+	}
+	if loaders.loadStatic == nil {
+		loaders.loadStatic = loadStaticBootstrapConfig
 	}
 
-	// Parse the command-line flags.
-	flag.Parse()
+	nacosAddr := strings.TrimSpace(loaders.nacosAddr)
+	if nacosAddr != "" {
+		loaded, nacosErr := loaders.loadNacos()
+		if nacosErr == nil {
+			if err := validateBootstrapConfig("nacos", loaded); err == nil {
+				return loaded, nil
+			} else {
+				nacosErr = err
+			}
+		}
+
+		log.WithError(nacosErr).Info("failed to bootstrap from nacos; falling back to local static config")
+
+		loaded, staticErr := loaders.loadStatic(configFilePath)
+		if staticErr != nil {
+			return nil, fmt.Errorf("failed to bootstrap from nacos (%w) and local static config (%w)", nacosErr, staticErr)
+		}
+		if err := validateBootstrapConfig("static", loaded); err != nil {
+			return nil, fmt.Errorf("failed to bootstrap from nacos (%w) and local static config (%w)", nacosErr, err)
+		}
+		return loaded, nil
+	}
+
+	loaded, err := loaders.loadStatic(configFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to bootstrap from local static config: %w", err)
+	}
+	if err := validateBootstrapConfig("static", loaded); err != nil {
+		return nil, fmt.Errorf("failed to bootstrap from local static config: %w", err)
+	}
+	return loaded, nil
+}
+
+func loadNacosBootstrapConfig() (*bootstrapConfig, error) {
+	client, err := nacos.NewClientFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("create nacos client: %w", err)
+	}
+	if client == nil {
+		return nil, fmt.Errorf("nacos configured but client was not created")
+	}
+
+	configSource := nacos.NewNacosConfigStore(client)
+	authStore := nacos.NewNacosAuthStore(client)
+	cfg, err := configSource.LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("load config from nacos: %w", err)
+	}
+
+	return &bootstrapConfig{
+		cfg:          cfg,
+		configSource: configSource,
+		authStore:    authStore,
+	}, nil
+}
+
+func loadStaticBootstrapConfig(configFilePath string) (*bootstrapConfig, error) {
+	cfg, err := config.LoadConfig(configFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &bootstrapConfig{
+		cfg:          cfg,
+		configSource: nacos.NewStaticConfigSource(configFilePath),
+	}, nil
+}
+
+func validateBootstrapConfig(sourceName string, loaded *bootstrapConfig) error {
+	if loaded == nil {
+		return fmt.Errorf("%s bootstrap returned nil result", sourceName)
+	}
+	if loaded.configSource == nil {
+		return fmt.Errorf("%s bootstrap returned nil config source", sourceName)
+	}
+	if loaded.cfg == nil {
+		loaded.cfg = &config.Config{}
+	}
+	return nil
+}
+
+// main is the entry point of the application.
+// It parses command-line flags, loads configuration, and starts the appropriate
+// service based on the provided flags (login, codex-login, or server mode).
+func main() {
+	fmt.Printf("Cockpit Version: %s, Commit: %s, BuiltAt: %s\n", buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate)
+
+	configFilePath, parseErr := parseCommandArgs(os.Args[0], os.Args[1:])
+	if parseErr != nil {
+		if errors.Is(parseErr, flag.ErrHelp) {
+			return
+		}
+		log.Errorf("failed to parse command line flags: %v", parseErr)
+		os.Exit(2)
+	}
 
 	// Core application variables.
 	var err error
-	var cfg *config.Config
-	var isCloudDeploy bool
 
 	wd, err := os.Getwd()
 	if err != nil {
@@ -103,84 +228,20 @@ func main() {
 		}
 	}
 
-	// Check for cloud deploy mode only on first execution
-	// Read env var name in uppercase: DEPLOY
-	deployEnv := os.Getenv("DEPLOY")
-	if deployEnv == "cloud" {
-		isCloudDeploy = true
-	}
-
 	// Determine and load the configuration file.
-	var configFilePath string
-	if configPath != "" {
-		configFilePath = configPath
-	} else {
-		wd, err = os.Getwd()
-		if err != nil {
-			log.Errorf("failed to get working directory: %v", err)
-			return
-		}
+	if configFilePath == "" {
 		configFilePath = filepath.Join(wd, "config.yaml")
 	}
 
-	var configSource nacos.ConfigSource
-	var authStore nacos.WatchableAuthStore
-	if os.Getenv("NACOS_ADDR") != "" {
-		client, errNewClient := nacos.NewClientFromEnv()
-		if errNewClient != nil {
-			log.Errorf("failed to create nacos client: %v", errNewClient)
-			return
-		}
-		if client == nil {
-			log.Error("nacos configured but client was not created")
-			return
-		}
-		configSource = nacos.NewNacosConfigStore(client)
-		authStore = nacos.NewNacosAuthStore(client)
-		cfg, err = configSource.LoadConfig()
-		if err != nil {
-			log.Errorf("failed to load config from nacos: %v", err)
-			return
-		}
-	} else {
-		cfg, err = config.LoadConfigOptional(configFilePath, isCloudDeploy)
-		if err != nil {
-			log.Errorf("failed to load config: %v", err)
-			return
-		}
-		configSource = nacos.NewStaticConfigSource(configFilePath)
-	}
-	if cfg == nil {
-		cfg = &config.Config{}
+	loaded, err := resolveBootstrapConfig(configFilePath, bootstrapLoaders{nacosAddr: os.Getenv("NACOS_ADDR")})
+	if err != nil {
+		log.Errorf("failed to bootstrap configuration: %v", err)
+		os.Exit(1)
 	}
 
-	// In cloud deploy mode, check if we have a valid configuration
-	var configFileExists bool
-	if isCloudDeploy {
-		if configSource != nil && configSource.Mode() == "nacos" {
-			if cfg.Port == 0 {
-				log.Info("Cloud deploy mode: Nacos configuration is empty or invalid; standing by for valid configuration")
-				configFileExists = false
-			} else {
-				log.Info("Cloud deploy mode: Nacos configuration detected; starting service")
-				configFileExists = true
-			}
-		} else {
-			if info, errStat := os.Stat(configFilePath); errStat != nil {
-				log.Info("Cloud deploy mode: No configuration file detected; standing by for configuration")
-				configFileExists = false
-			} else if info.IsDir() {
-				log.Info("Cloud deploy mode: Config path is a directory; standing by for configuration")
-				configFileExists = false
-			} else if cfg.Port == 0 {
-				log.Info("Cloud deploy mode: Configuration file is empty or invalid; standing by for valid configuration")
-				configFileExists = false
-			} else {
-				log.Info("Cloud deploy mode: Configuration file detected; starting service")
-				configFileExists = true
-			}
-		}
-	}
+	cfg := loaded.cfg
+	configSource := loaded.configSource
+	authStore := loaded.authStore
 	coreauth.SetQuotaCooldownDisabled(cfg.DisableCooling)
 
 	if err = logging.ConfigureLogOutput(cfg); err != nil {
@@ -206,13 +267,6 @@ func main() {
 
 	// Register built-in access providers before constructing services.
 	configaccess.Register(&cfg.SDKConfig)
-
-	// In cloud deploy mode without config file, just wait for shutdown signals
-	if isCloudDeploy && !configFileExists {
-		// No config file available, just wait for shutdown
-		cmd.WaitForCloudDeploy()
-		return
-	}
 
 	// Start the main proxy service
 	registry.StartModelsUpdater(context.Background())
