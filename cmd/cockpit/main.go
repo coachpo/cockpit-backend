@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	configaccess "github.com/coachpo/cockpit-backend/internal/access/config_access"
-	"github.com/coachpo/cockpit-backend/internal/buildinfo"
 	"github.com/coachpo/cockpit-backend/internal/cmd"
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/logging"
@@ -25,20 +24,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var (
-	Version   = "dev"
-	Commit    = "none"
-	BuildDate = "unknown"
-)
-
 const configPathUsage = "Path to the YAML config file (defaults to ./config.yaml)"
 
 // init initializes the shared logger setup.
 func init() {
 	logging.SetupBaseLogger()
-	buildinfo.Version = Version
-	buildinfo.Commit = Commit
-	buildinfo.BuildDate = BuildDate
 }
 
 func warnIfUsingLocalStaticMode(configSource nacos.ConfigSource, configFilePath string) {
@@ -201,8 +191,6 @@ func validateBootstrapConfig(sourceName string, loaded *bootstrapConfig) error {
 // It parses command-line flags, loads configuration, and starts the appropriate
 // service based on the provided flags (login, codex-login, or server mode).
 func main() {
-	fmt.Printf("Cockpit Version: %s, Commit: %s, BuiltAt: %s\n", buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate)
-
 	configFilePath, parseErr := parseCommandArgs(os.Args[0], os.Args[1:])
 	if parseErr != nil {
 		if errors.Is(parseErr, flag.ErrHelp) {
@@ -249,8 +237,6 @@ func main() {
 		return
 	}
 	warnIfUsingLocalStaticMode(configSource, configFilePath)
-
-	log.Infof("Cockpit Version: %s, Commit: %s, BuiltAt: %s", buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate)
 
 	// Set the log level based on the configuration.
 	util.SetLogLevel(cfg)

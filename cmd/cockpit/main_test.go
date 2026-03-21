@@ -77,6 +77,9 @@ func TestMainExitsNonZeroWhenBootstrapFails(t *testing.T) {
 	if !strings.Contains(string(output), "failed to bootstrap configuration") {
 		t.Fatalf("expected bootstrap failure output, got %q", string(output))
 	}
+	if strings.Contains(string(output), "Cockpit Version:") {
+		t.Fatalf("expected bootstrap failure output to omit build metadata, got %q", string(output))
+	}
 }
 
 func TestNewCommandFlagSet_ExposesOnlyConfigFlag(t *testing.T) {
