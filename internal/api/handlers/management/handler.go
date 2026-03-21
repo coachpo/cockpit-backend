@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coachpo/cockpit-backend/internal/buildinfo"
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
@@ -150,10 +149,6 @@ func (h *Handler) Middleware() gin.HandlerFunc {
 	const banDuration = 30 * time.Minute
 
 	return func(c *gin.Context) {
-		c.Header("X-CPA-VERSION", buildinfo.Version)
-		c.Header("X-CPA-COMMIT", buildinfo.Commit)
-		c.Header("X-CPA-BUILD-DATE", buildinfo.BuildDate)
-
 		clientIP := c.ClientIP()
 		localClient := clientIP == "127.0.0.1" || clientIP == "::1"
 		cfg := h.cfg

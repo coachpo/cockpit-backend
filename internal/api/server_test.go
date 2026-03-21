@@ -55,4 +55,13 @@ func TestManagementRequestLogRouteRegisteredWhenSecretPresent(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected request-log route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
+	if got := rec.Header().Get("X-CPA-VERSION"); got != "" {
+		t.Fatalf("expected no X-CPA-VERSION header, got %q", got)
+	}
+	if got := rec.Header().Get("X-CPA-COMMIT"); got != "" {
+		t.Fatalf("expected no X-CPA-COMMIT header, got %q", got)
+	}
+	if got := rec.Header().Get("X-CPA-BUILD-DATE"); got != "" {
+		t.Fatalf("expected no X-CPA-BUILD-DATE header, got %q", got)
+	}
 }
