@@ -13,6 +13,7 @@ import (
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
+	"github.com/coachpo/cockpit-backend/internal/registry"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/gin-gonic/gin"
 )
@@ -56,6 +57,65 @@ func TestUploadAuthFile_UsesInjectedStoreWithoutWritingDisk(t *testing.T) {
 	}
 	if _, ok := manager.GetByID("upload.json"); !ok {
 		t.Fatalf("expected auth manager to be updated after upload")
+	}
+}
+
+func TestUploadAuthFile_RegistersModelsForManagedAuth(t *testing.T) {
+	t.Setenv("MANAGEMENT_PASSWORD", "")
+	gin.SetMode(gin.TestMode)
+
+	authID := "upload-models.json"
+	registry.GetGlobalRegistry().UnregisterClient(authID)
+	t.Cleanup(func() {
+		registry.GetGlobalRegistry().UnregisterClient(authID)
+	})
+
+	manager := coreauth.NewManager(nil, nil, nil)
+	store := &recordingAuthStore{}
+	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: t.TempDir()}, manager)
+	h.authStore = store
+
+	uploadRec := httptest.NewRecorder()
+	uploadCtx, _ := gin.CreateTestContext(uploadRec)
+	uploadReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v0/management/auth-files?name=upload-models.json",
+		bytes.NewBufferString(`{"type":"codex","email":"upload-models@example.com"}`),
+	)
+	uploadReq.Header.Set("Content-Type", "application/json")
+	uploadCtx.Request = uploadReq
+	h.UploadAuthFile(uploadCtx)
+
+	if uploadRec.Code != http.StatusOK {
+		t.Fatalf("expected upload status %d, got %d with body %s", http.StatusOK, uploadRec.Code, uploadRec.Body.String())
+	}
+
+	models := registry.GetGlobalRegistry().GetModelsForClient(authID)
+	if len(models) == 0 {
+		t.Fatal("expected uploaded managed auth to register models in the global registry")
+	}
+
+	modelsRec := httptest.NewRecorder()
+	modelsCtx, _ := gin.CreateTestContext(modelsRec)
+	modelsCtx.Request = httptest.NewRequest(
+		http.MethodGet,
+		"/v0/management/auth-files/models?name=upload-models.json",
+		nil,
+	)
+	h.GetAuthFileModels(modelsCtx)
+
+	if modelsRec.Code != http.StatusOK {
+		t.Fatalf("expected auth file models status %d, got %d with body %s", http.StatusOK, modelsRec.Code, modelsRec.Body.String())
+	}
+
+	var payload struct {
+		Models []map[string]any `json:"models"`
+	}
+	if err := json.Unmarshal(modelsRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode auth file models response: %v", err)
+	}
+	if len(payload.Models) == 0 {
+		t.Fatal("expected auth file models response to include registered models")
 	}
 }
 

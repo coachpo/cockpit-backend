@@ -98,9 +98,15 @@ func (h *Handler) upsertManagedAuth(ctx context.Context, auth *coreauth.Auth) er
 		}
 		auth.Runtime = existing.Runtime
 		_, err := h.authManager.Update(ctx, auth)
+		if err == nil {
+			syncManagedAuthModels(auth)
+		}
 		return err
 	}
 	_, err := h.authManager.Register(ctx, auth)
+	if err == nil {
+		syncManagedAuthModels(auth)
+	}
 	return err
 }
 
@@ -365,5 +371,6 @@ func (h *Handler) disableAuth(ctx context.Context, id string) {
 			delete(auth.Attributes, "source")
 		}
 		_, _ = h.authManager.Update(coreauth.WithSkipPersist(ctx), auth)
+		syncManagedAuthModels(auth)
 	}
 }

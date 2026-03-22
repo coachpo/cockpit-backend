@@ -16,22 +16,59 @@ type staticModelsJSON struct {
 
 // GetCodexFreeModels returns model definitions for the Codex free plan tier.
 func GetCodexFreeModels() []*ModelInfo {
-	return cloneModelInfos(getModels().CodexFree)
+	return codexModelsWithKnownAdditions(getModels().CodexFree)
 }
 
 // GetCodexTeamModels returns model definitions for the Codex team plan tier.
 func GetCodexTeamModels() []*ModelInfo {
-	return cloneModelInfos(getModels().CodexTeam)
+	return codexModelsWithKnownAdditions(getModels().CodexTeam)
 }
 
 // GetCodexPlusModels returns model definitions for the Codex plus plan tier.
 func GetCodexPlusModels() []*ModelInfo {
-	return cloneModelInfos(getModels().CodexPlus)
+	return codexModelsWithKnownAdditions(getModels().CodexPlus)
 }
 
 // GetCodexProModels returns model definitions for the Codex pro plan tier.
 func GetCodexProModels() []*ModelInfo {
-	return cloneModelInfos(getModels().CodexPro)
+	return codexModelsWithKnownAdditions(getModels().CodexPro)
+}
+
+func codexModelsWithKnownAdditions(models []*ModelInfo) []*ModelInfo {
+	cloned := cloneModelInfos(models)
+	return ensureKnownCodexMiniModel(cloned)
+}
+
+func ensureKnownCodexMiniModel(models []*ModelInfo) []*ModelInfo {
+	if len(models) == 0 {
+		return models
+	}
+	for _, model := range models {
+		if model != nil && model.ID == "gpt-5.4-mini" {
+			return models
+		}
+	}
+	var template *ModelInfo
+	for _, model := range models {
+		if model != nil && model.ID == "gpt-5.4" {
+			template = cloneModelInfo(model)
+			break
+		}
+	}
+	if template == nil {
+		return models
+	}
+	template.ID = "gpt-5.4-mini"
+	if strings.TrimSpace(template.DisplayName) != "" {
+		template.DisplayName = "GPT-5.4 mini"
+	}
+	if strings.TrimSpace(template.Name) != "" {
+		template.Name = "gpt-5.4-mini"
+	}
+	if strings.TrimSpace(template.Version) != "" {
+		template.Version = "gpt-5.4-mini"
+	}
+	return append(models, template)
 }
 
 // cloneModelInfos returns a shallow copy of the slice with each element deep-cloned.
@@ -68,12 +105,11 @@ func LookupStaticModelInfo(modelID string) *ModelInfo {
 		return nil
 	}
 
-	data := getModels()
 	allModels := [][]*ModelInfo{
-		data.CodexFree,
-		data.CodexTeam,
-		data.CodexPlus,
-		data.CodexPro,
+		GetCodexFreeModels(),
+		GetCodexTeamModels(),
+		GetCodexPlusModels(),
+		GetCodexProModels(),
 	}
 	for _, models := range allModels {
 		for _, m := range models {

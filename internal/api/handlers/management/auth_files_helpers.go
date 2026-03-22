@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coachpo/cockpit-backend/internal/auth/codex"
+	"github.com/coachpo/cockpit-backend/internal/registry"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 )
 
@@ -145,5 +147,51 @@ func buildAuthAttributes(metadata map[string]any) map[string]string {
 	case int:
 		attributes["priority"] = strconv.Itoa(value)
 	}
+	if provider, _ := metadata["type"].(string); strings.EqualFold(strings.TrimSpace(provider), "codex") {
+		if idTokenRaw, ok := metadata["id_token"].(string); ok && strings.TrimSpace(idTokenRaw) != "" {
+			if claims, errParse := codex.ParseJWTToken(idTokenRaw); errParse == nil && claims != nil {
+				if pt := strings.TrimSpace(claims.CodexAuthInfo.ChatgptPlanType); pt != "" {
+					attributes["plan_type"] = pt
+				}
+			}
+		}
+	}
 	return attributes
+}
+
+func syncManagedAuthModels(auth *coreauth.Auth) {
+	if auth == nil || strings.TrimSpace(auth.ID) == "" {
+		return
+	}
+	if auth.Disabled {
+		registry.GetGlobalRegistry().UnregisterClient(auth.ID)
+		return
+	}
+	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
+	var models []*registry.ModelInfo
+	switch provider {
+	case "codex":
+		planType := ""
+		if auth.Attributes != nil {
+			planType = strings.ToLower(strings.TrimSpace(auth.Attributes["plan_type"]))
+		}
+		switch planType {
+		case "free":
+			models = registry.GetCodexFreeModels()
+		case "team", "business", "go":
+			models = registry.GetCodexTeamModels()
+		case "plus":
+			models = registry.GetCodexPlusModels()
+		default:
+			models = registry.GetCodexProModels()
+		}
+	default:
+		registry.GetGlobalRegistry().UnregisterClient(auth.ID)
+		return
+	}
+	if len(models) == 0 {
+		registry.GetGlobalRegistry().UnregisterClient(auth.ID)
+		return
+	}
+	registry.GetGlobalRegistry().RegisterClient(auth.ID, provider, models)
 }
