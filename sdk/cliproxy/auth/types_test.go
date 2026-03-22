@@ -37,48 +37,46 @@ func TestToolPrefixDisabled(t *testing.T) {
 func TestEnsureIndexUsesCredentialIdentity(t *testing.T) {
 	t.Parallel()
 
-	geminiAuth := &Auth{
-		Provider: "gemini",
+	primaryAuth := &Auth{
+		Provider: "codex",
 		Attributes: map[string]string{
 			"api_key": "shared-key",
-			"source":  "config:gemini[abc123]",
+			"source":  "config:codex[abc123]",
 		},
 	}
-	compatAuth := &Auth{
-		Provider: "bohe",
+	secondaryAuth := &Auth{
+		Provider: "custom",
 		Attributes: map[string]string{
-			"api_key":      "shared-key",
-			"compat_name":  "bohe",
-			"provider_key": "bohe",
-			"source":       "config:bohe[def456]",
+			"api_key": "shared-key",
+			"source":  "config:custom[def456]",
 		},
 	}
-	geminiAltBase := &Auth{
-		Provider: "gemini",
+	primaryAltBase := &Auth{
+		Provider: "codex",
 		Attributes: map[string]string{
 			"api_key":  "shared-key",
 			"base_url": "https://alt.example.com",
-			"source":   "config:gemini[ghi789]",
+			"source":   "config:codex[ghi789]",
 		},
 	}
-	geminiDuplicate := &Auth{
-		Provider: "gemini",
+	primaryDuplicate := &Auth{
+		Provider: "codex",
 		Attributes: map[string]string{
 			"api_key": "shared-key",
-			"source":  "config:gemini[abc123-1]",
+			"source":  "config:codex[abc123-1]",
 		},
 	}
 
-	geminiIndex := geminiAuth.EnsureIndex()
-	compatIndex := compatAuth.EnsureIndex()
-	altBaseIndex := geminiAltBase.EnsureIndex()
-	duplicateIndex := geminiDuplicate.EnsureIndex()
+	primaryIndex := primaryAuth.EnsureIndex()
+	secondaryIndex := secondaryAuth.EnsureIndex()
+	altBaseIndex := primaryAltBase.EnsureIndex()
+	duplicateIndex := primaryDuplicate.EnsureIndex()
 
-	if geminiIndex == "" {
-		t.Fatal("gemini index should not be empty")
+	if primaryIndex == "" {
+		t.Fatal("primary index should not be empty")
 	}
-	if compatIndex == "" {
-		t.Fatal("compat index should not be empty")
+	if secondaryIndex == "" {
+		t.Fatal("secondary index should not be empty")
 	}
 	if altBaseIndex == "" {
 		t.Fatal("alt base index should not be empty")
@@ -86,14 +84,30 @@ func TestEnsureIndexUsesCredentialIdentity(t *testing.T) {
 	if duplicateIndex == "" {
 		t.Fatal("duplicate index should not be empty")
 	}
-	if geminiIndex == compatIndex {
-		t.Fatalf("shared api key produced duplicate auth_index %q", geminiIndex)
+	if primaryIndex == secondaryIndex {
+		t.Fatalf("shared api key produced duplicate auth_index %q", primaryIndex)
 	}
-	if geminiIndex == altBaseIndex {
-		t.Fatalf("same provider/key with different base_url produced duplicate auth_index %q", geminiIndex)
+	if primaryIndex == altBaseIndex {
+		t.Fatalf("same provider/key with different base_url produced duplicate auth_index %q", primaryIndex)
 	}
-	if geminiIndex == duplicateIndex {
-		t.Fatalf("duplicate config entries should be separated by source-derived seed, got %q", geminiIndex)
+	if primaryIndex == duplicateIndex {
+		t.Fatalf("duplicate config entries should be separated by source-derived seed, got %q", primaryIndex)
+	}
+}
+
+func TestExecutorKeyFromAuth_UsesProviderOnly(t *testing.T) {
+	t.Parallel()
+
+	auth := &Auth{
+		Provider: "CoDeX",
+		Attributes: map[string]string{
+			"provider_key": "ignored-provider-attr",
+			"compat_name":  "ignored-name-attr",
+		},
+	}
+
+	if got := executorKeyFromAuth(auth); got != "codex" {
+		t.Fatalf("executorKeyFromAuth() = %q, want %q", got, "codex")
 	}
 }
 
@@ -139,16 +153,16 @@ func TestAccountInfo(t *testing.T) {
 		{
 			name: "api key account info uses attributes api_key",
 			auth: &Auth{
-				Provider:   "openai",
+				Provider:   "codex",
 				Attributes: map[string]string{"api_key": "sk-test"},
 			},
 			wantType:  "api_key",
 			wantValue: "sk-test",
 		},
 		{
-			name: "gemini-cli project_id metadata is ignored in oauth account info",
+			name: "project_id metadata is ignored in oauth account info",
 			auth: &Auth{
-				Provider: "gemini-cli",
+				Provider: "codex",
 				Metadata: map[string]any{
 					"email":      "user@example.com",
 					"project_id": "project-123",
@@ -158,13 +172,13 @@ func TestAccountInfo(t *testing.T) {
 			wantValue: "user@example.com",
 		},
 		{
-			name: "iflow email metadata follows generic oauth behavior",
+			name: "oauth email metadata follows generic oauth behavior",
 			auth: &Auth{
-				Provider: "iflow",
-				Metadata: map[string]any{"email": "iflow-user@example.com"},
+				Provider: "codex",
+				Metadata: map[string]any{"email": "oauth-user@example.com"},
 			},
 			wantType:  "oauth",
-			wantValue: "iflow-user@example.com",
+			wantValue: "oauth-user@example.com",
 		},
 	}
 

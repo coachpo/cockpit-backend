@@ -430,14 +430,8 @@ func runNacosSmokeTest(t *testing.T, cfg nacosSmokeConfig) error {
 	if err = nacosPublishConfig(httpClient, cfg, token, nacosSmokeConfigDataID, buildSmokeConfig(cfg.port, true, true), "yaml"); err != nil {
 		return err
 	}
-	if err = waitForBufferContainsAfter(buffer, updateOffset, "log level changed from info to debug (debug=true)", 10*time.Second); err != nil {
-		return err
-	}
 	if err = waitForBufferContainsAfter(buffer, updateOffset, "config reloaded from source, triggering client reload", 10*time.Second); err != nil {
 		return err
-	}
-	if level := log.GetLevel(); level != log.DebugLevel {
-		return fmt.Errorf("expected debug log level after reload, got %s", level)
 	}
 
 	requestOffset := buffer.Len()
@@ -467,7 +461,37 @@ func runNacosSmokeTest(t *testing.T, cfg nacosSmokeConfig) error {
 	return nil
 }
 
-func buildSmokeConfig(port int, debugEnabled bool, requestLog bool) string {
+func TestBuildSmokeConfig_UsesRetainedSchema(t *testing.T) {
+	const want = `host: ""
+port: 8317
+
+remote-management:
+  allow-remote: false
+  secret-key: "change-me-to-a-strong-password"
+
+auth-dir: "~/.cockpit"
+
+disable-cooling: true
+request-retry: 3
+max-retry-credentials: 0
+max-retry-interval: 30
+passthrough-headers: true
+
+quota-exceeded:
+  switch-project: true
+
+routing:
+  strategy: "round-robin"
+
+ws-auth: false
+`
+
+	if got := buildSmokeConfig(8317, true, true); got != want {
+		t.Fatalf("unexpected smoke config:\n%s", got)
+	}
+}
+
+func buildSmokeConfig(port int, disableCooling bool, passthroughHeaders bool) string {
 	return fmt.Sprintf(`host: ""
 port: %d
 
@@ -477,21 +501,20 @@ remote-management:
 
 auth-dir: "~/.cockpit"
 
-debug: %t
-request-log: %t
+disable-cooling: %t
 request-retry: 3
 max-retry-credentials: 0
 max-retry-interval: 30
+passthrough-headers: %t
 
 quota-exceeded:
   switch-project: true
-  switch-preview-model: true
 
 routing:
   strategy: "round-robin"
 
 ws-auth: false
-`, port, debugEnabled, requestLog)
+`, port, disableCooling, passthroughHeaders)
 }
 
 func nacosLogin(httpClient *http.Client, cfg nacosSmokeConfig) (string, error) {

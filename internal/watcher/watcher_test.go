@@ -15,61 +15,21 @@ import (
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
-	"github.com/coachpo/cockpit-backend/internal/watcher/diff"
-	"github.com/coachpo/cockpit-backend/internal/watcher/synthesizer"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"gopkg.in/yaml.v3"
 )
 
-func TestApplyAuthExcludedModelsMeta_APIKey(t *testing.T) {
-	auth := &coreauth.Auth{Attributes: map[string]string{}}
-	cfg := &config.Config{}
-	perKey := []string{" Model-1 ", "model-2"}
-
-	synthesizer.ApplyAuthExcludedModelsMeta(auth, cfg, perKey, "apikey")
-
-	expected := diff.ComputeExcludedModelsHash([]string{"model-1", "model-2"})
-	if got := auth.Attributes["excluded_models_hash"]; got != expected {
-		t.Fatalf("expected hash %s, got %s", expected, got)
-	}
-	if got := auth.Attributes["auth_kind"]; got != "apikey" {
-		t.Fatalf("expected auth_kind=apikey, got %s", got)
-	}
-}
-
-func TestApplyAuthExcludedModelsMeta_OAuthProvider(t *testing.T) {
-	auth := &coreauth.Auth{
-		Provider:   "TestProv",
-		Attributes: map[string]string{},
-	}
-	cfg := &config.Config{
-		OAuthExcludedModels: map[string][]string{
-			"testprov": {"A", "b"},
-		},
-	}
-
-	synthesizer.ApplyAuthExcludedModelsMeta(auth, cfg, nil, "oauth")
-
-	expected := diff.ComputeExcludedModelsHash([]string{"a", "b"})
-	if got := auth.Attributes["excluded_models_hash"]; got != expected {
-		t.Fatalf("expected hash %s, got %s", expected, got)
-	}
-	if got := auth.Attributes["auth_kind"]; got != "oauth" {
-		t.Fatalf("expected auth_kind=oauth, got %s", got)
-	}
-}
-
 func TestBuildAPIKeyClientsCounts(t *testing.T) {
 	cfg := &config.Config{
-		CodexKey: []config.CodexKey{{APIKey: "x1"}, {APIKey: "x2"}},
-		OpenAICompatibility: []config.OpenAICompatibility{
-			{APIKeyEntries: []config.OpenAICompatibilityAPIKey{{APIKey: "o1"}, {APIKey: "o2"}}},
+		CodexKey: []config.CodexKey{
+			{APIKey: "x1", BaseURL: "https://api.example.invalid/v1"},
+			{APIKey: "x2", BaseURL: "https://api-2.example.invalid/v1"},
 		},
 	}
 
-	codex, compat := BuildAPIKeyClients(cfg)
-	if codex != 2 || compat != 2 {
-		t.Fatalf("unexpected counts: %d %d", codex, compat)
+	codex := BuildAPIKeyClients(cfg)
+	if codex != 2 {
+		t.Fatalf("unexpected count: %d", codex)
 	}
 }
 
@@ -98,15 +58,6 @@ func TestNormalizeAuthStripsTemporalFields(t *testing.T) {
 	}
 }
 
-func TestMatchProvider(t *testing.T) {
-	if _, ok := matchProvider("OpenAI", []string{"openai", "claude"}); !ok {
-		t.Fatal("expected match to succeed ignoring case")
-	}
-	if _, ok := matchProvider("missing", []string{"openai"}); ok {
-		t.Fatal("expected match to fail for unknown provider")
-	}
-}
-
 func TestSnapshotCoreAuths_ConfigAndAuthFiles(t *testing.T) {
 	authDir := t.TempDir()
 	metadata := map[string]any{
@@ -126,13 +77,10 @@ func TestSnapshotCoreAuths_ConfigAndAuthFiles(t *testing.T) {
 		AuthDir: authDir,
 		CodexKey: []config.CodexKey{
 			{
-				APIKey:         "x-key",
-				ExcludedModels: []string{"Model-A", "model-b"},
-				Headers:        map[string]string{"X-Req": "1"},
+				APIKey:  "x-key",
+				BaseURL: "https://api.example.invalid/v1",
+				Headers: map[string]string{"X-Req": "1"},
 			},
-		},
-		OAuthExcludedModels: map[string][]string{
-			"codex": {"Foo", "bar"},
 		},
 	}
 
@@ -157,9 +105,8 @@ func TestSnapshotCoreAuths_ConfigAndAuthFiles(t *testing.T) {
 	if codexAPIKeyAuth == nil {
 		t.Fatal("expected synthesized Codex API key auth")
 	}
-	expectedAPIKeyHash := diff.ComputeExcludedModelsHash([]string{"Model-A", "model-b"})
-	if codexAPIKeyAuth.Attributes["excluded_models_hash"] != expectedAPIKeyHash {
-		t.Fatalf("expected API key excluded hash %s, got %s", expectedAPIKeyHash, codexAPIKeyAuth.Attributes["excluded_models_hash"])
+	if got := codexAPIKeyAuth.Attributes["base_url"]; got == "" {
+		t.Fatal("expected synthesized Codex API key auth to retain base_url")
 	}
 	if codexAPIKeyAuth.Attributes["auth_kind"] != "apikey" {
 		t.Fatalf("expected auth_kind=apikey, got %s", codexAPIKeyAuth.Attributes["auth_kind"])
@@ -167,10 +114,6 @@ func TestSnapshotCoreAuths_ConfigAndAuthFiles(t *testing.T) {
 
 	if codexFileAuth == nil {
 		t.Fatal("expected codex auth from file")
-	}
-	expectedOAuthHash := diff.ComputeExcludedModelsHash([]string{"Foo", "bar"})
-	if codexFileAuth.Attributes["excluded_models_hash"] != expectedOAuthHash {
-		t.Fatalf("expected OAuth excluded hash %s, got %s", expectedOAuthHash, codexFileAuth.Attributes["excluded_models_hash"])
 	}
 	if codexFileAuth.Attributes["auth_kind"] != "oauth" {
 		t.Fatalf("expected auth_kind=oauth, got %s", codexFileAuth.Attributes["auth_kind"])
@@ -241,7 +184,7 @@ func TestStartAndStopSuccess(t *testing.T) {
 		t.Fatalf("failed to create auth dir: %v", err)
 	}
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("auth_dir: "+authDir), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("auth-dir: "+authDir), 0o644); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
@@ -542,7 +485,7 @@ func TestReloadClientsCachesAuthHashes(t *testing.T) {
 		config:  &config.Config{AuthDir: tmpDir},
 	}
 
-	w.reloadClients(true, nil, false)
+	w.reloadClients(true, false)
 
 	w.clientsMutex.RLock()
 	defer w.clientsMutex.RUnlock()
@@ -553,8 +496,8 @@ func TestReloadClientsCachesAuthHashes(t *testing.T) {
 
 func TestReloadClientsLogsConfigDiffs(t *testing.T) {
 	tmpDir := t.TempDir()
-	oldCfg := &config.Config{AuthDir: tmpDir, Port: 1, Debug: false}
-	newCfg := &config.Config{AuthDir: tmpDir, Port: 2, Debug: true}
+	oldCfg := &config.Config{AuthDir: tmpDir, Port: 1}
+	newCfg := &config.Config{AuthDir: tmpDir, Port: 2}
 
 	w := &Watcher{
 		authDir: tmpDir,
@@ -567,24 +510,12 @@ func TestReloadClientsLogsConfigDiffs(t *testing.T) {
 	w.config = newCfg
 	w.clientsMutex.Unlock()
 
-	w.reloadClients(false, nil, false)
+	w.reloadClients(false, false)
 }
 
 func TestReloadClientsHandlesNilConfig(t *testing.T) {
 	w := &Watcher{}
-	w.reloadClients(true, nil, false)
-}
-
-func TestReloadClientsFiltersProvidersWithNilCurrentAuths(t *testing.T) {
-	tmp := t.TempDir()
-	w := &Watcher{
-		authDir: tmp,
-		config:  &config.Config{AuthDir: tmp},
-	}
-	w.reloadClients(false, []string{"match"}, false)
-	if w.currentAuths != nil && len(w.currentAuths) != 0 {
-		t.Fatalf("expected currentAuths to be nil or empty, got %d", len(w.currentAuths))
-	}
+	w.reloadClients(true, false)
 }
 
 func TestSetAuthUpdateQueueNilResetsDispatch(t *testing.T) {
@@ -903,69 +834,29 @@ func TestReloadConfigIfChangedHandlesMissingAndEmpty(t *testing.T) {
 	w.reloadConfigIfChanged() // empty file -> early return
 }
 
-func TestReloadConfigFiltersAffectedOAuthProviders(t *testing.T) {
-	tmpDir := t.TempDir()
-	authDir := filepath.Join(tmpDir, "auth")
-	if err := os.MkdirAll(authDir, 0o755); err != nil {
-		t.Fatalf("failed to create auth dir: %v", err)
-	}
-	configPath := filepath.Join(tmpDir, "config.yaml")
-
-	// Ensure SnapshotCoreAuths yields a provider that is NOT affected, so we can assert it survives.
-	if err := os.WriteFile(filepath.Join(authDir, "codex-b.json"), []byte(`{"type":"codex","email":"b@example.com"}`), 0o644); err != nil {
-		t.Fatalf("failed to write auth file: %v", err)
+func TestReloadConfigFromSourceSkipsNoopConfigUpdate(t *testing.T) {
+	authDir := t.TempDir()
+	baseCfg := &config.Config{
+		AuthDir:             authDir,
+		Port:                8080,
+		RequestRetry:        2,
+		MaxRetryCredentials: 1,
+		MaxRetryInterval:    30,
 	}
 
-	oldCfg := &config.Config{
-		AuthDir: authDir,
-		OAuthExcludedModels: map[string][]string{
-			"provider-a": {"m1"},
-		},
-	}
-	newCfg := &config.Config{
-		AuthDir: authDir,
-		OAuthExcludedModels: map[string][]string{
-			"provider-a": {"m2"},
-		},
-	}
-	data, err := yaml.Marshal(newCfg)
-	if err != nil {
-		t.Fatalf("failed to marshal config: %v", err)
-	}
-	if err = os.WriteFile(configPath, data, 0o644); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
-
+	reloads := 0
 	w := &Watcher{
-		configPath:     configPath,
 		authDir:        authDir,
 		lastAuthHashes: make(map[string]string),
-		currentAuths: map[string]*coreauth.Auth{
-			"a": {ID: "a", Provider: "provider-a"},
-		},
+		reloadCallback: func(*config.Config) { reloads++ },
 	}
-	w.SetConfig(oldCfg)
+	w.SetConfig(baseCfg)
 
-	if ok := w.reloadConfig(); !ok {
-		t.Fatal("expected reloadConfig to succeed")
-	}
+	clone := *baseCfg
+	w.reloadConfigFromSource(&clone)
 
-	w.clientsMutex.RLock()
-	defer w.clientsMutex.RUnlock()
-	for _, auth := range w.currentAuths {
-		if auth != nil && auth.Provider == "provider-a" {
-			t.Fatal("expected affected provider auth to be filtered")
-		}
-	}
-	foundB := false
-	for _, auth := range w.currentAuths {
-		if auth != nil && auth.Provider == "codex" {
-			foundB = true
-			break
-		}
-	}
-	if !foundB {
-		t.Fatal("expected unaffected provider auth to remain")
+	if reloads != 0 {
+		t.Fatalf("expected no reload callback for unchanged effective config, got %d", reloads)
 	}
 }
 
@@ -1059,7 +950,7 @@ func TestScheduleConfigReloadDebounces(t *testing.T) {
 	tmp := t.TempDir()
 	authDir := tmp
 	cfgPath := tmp + "/config.yaml"
-	if err := os.WriteFile(cfgPath, []byte("auth_dir: "+authDir+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("auth-dir: "+authDir+"\n"), 0o644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
@@ -1157,13 +1048,10 @@ func TestReloadClientsFiltersOAuthProvidersWithoutRescan(t *testing.T) {
 		lastAuthHashes: map[string]string{"cached": "hash"},
 	}
 
-	w.reloadClients(false, []string{"match"}, false)
+	w.reloadClients(false, false)
 
 	w.clientsMutex.RLock()
 	defer w.clientsMutex.RUnlock()
-	if _, ok := w.currentAuths["a"]; ok {
-		t.Fatal("expected filtered provider to be removed")
-	}
 	if len(w.lastAuthHashes) != 1 {
 		t.Fatalf("expected existing hash cache to be retained, got %d", len(w.lastAuthHashes))
 	}

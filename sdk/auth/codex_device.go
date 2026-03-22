@@ -16,7 +16,6 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/auth/codex"
 	"github.com/coachpo/cockpit-backend/internal/browser"
 	"github.com/coachpo/cockpit-backend/internal/config"
-	"github.com/coachpo/cockpit-backend/internal/util"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
 )
@@ -66,7 +65,7 @@ func (a *CodexAuthenticator) loginWithDeviceFlow(ctx context.Context, cfg *confi
 		ctx = context.Background()
 	}
 
-	httpClient := util.SetProxy(&cfg.SDKConfig, &http.Client{})
+	httpClient := &http.Client{}
 
 	userCodeResp, err := requestCodexDeviceUserCode(ctx, httpClient)
 	if err != nil {

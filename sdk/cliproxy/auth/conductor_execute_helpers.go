@@ -76,18 +76,3 @@ func publishSelectedAuthMetadata(meta map[string]any, authID string) {
 		callback(authID)
 	}
 }
-
-func rewriteModelForAuth(model string, auth *Auth) string {
-	if auth == nil || model == "" {
-		return model
-	}
-	prefix := strings.TrimSpace(auth.Prefix)
-	if prefix == "" {
-		return model
-	}
-	needle := prefix + "/"
-	if !strings.HasPrefix(model, needle) {
-		return model
-	}
-	return strings.TrimPrefix(model, needle)
-}

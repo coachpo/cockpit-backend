@@ -67,13 +67,6 @@ type Server struct {
 
 	// managementRoutesRegistered tracks whether the management routes have been attached to the engine.
 	managementRoutesRegistered atomic.Bool
-	// managementRoutesEnabled controls whether management endpoints serve real handlers.
-	managementRoutesEnabled atomic.Bool
-
-	// envManagementSecret indicates whether MANAGEMENT_PASSWORD is configured.
-	envManagementSecret bool
-
-	localPassword string
 
 	keepAliveEnabled   bool
 	keepAliveTimeout   time.Duration
@@ -98,9 +91,7 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		opts[i](optionState)
 	}
 	// Set gin mode
-	if !cfg.Debug {
-		gin.SetMode(gin.ReleaseMode)
-	}
+	gin.SetMode(gin.ReleaseMode)
 
 	// Create gin engine
 	engine := gin.New()
@@ -121,21 +112,16 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		wd = configFilePath
 	}
 
-	envAdminPassword, envAdminPasswordSet := os.LookupEnv("MANAGEMENT_PASSWORD")
-	envAdminPassword = strings.TrimSpace(envAdminPassword)
-	envManagementSecret := envAdminPasswordSet && envAdminPassword != ""
-
 	// Create server instance
 	s := &Server{
-		engine:              engine,
-		handlers:            handlers.NewBaseAPIHandlers(&cfg.SDKConfig, authManager),
-		cfg:                 cfg,
-		accessManager:       accessManager,
-		configFilePath:      configFilePath,
-		currentPath:         wd,
-		envManagementSecret: envManagementSecret,
-		wsRoutes:            make(map[string]struct{}),
-		authStore:           authStore,
+		engine:         engine,
+		handlers:       handlers.NewBaseAPIHandlers(&cfg.SDKConfig, authManager),
+		cfg:            cfg,
+		accessManager:  accessManager,
+		configFilePath: configFilePath,
+		currentPath:    wd,
+		wsRoutes:       make(map[string]struct{}),
+		authStore:      authStore,
 	}
 	s.wsAuthEnabled.Store(cfg.WebsocketAuth)
 	// Save initial YAML snapshot
@@ -150,15 +136,11 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	if optionState.configSaver != nil {
 		s.mgmt.SetConfigSaver(optionState.configSaver)
 	}
-	if optionState.localPassword != "" {
-		s.mgmt.SetLocalPassword(optionState.localPassword)
-	}
 	logDir := logging.ResolveLogDirectory(cfg)
 	s.mgmt.SetLogDirectory(logDir)
 	if optionState.postAuthHook != nil {
 		s.mgmt.SetPostAuthHook(optionState.postAuthHook)
 	}
-	s.localPassword = optionState.localPassword
 
 	// Setup routes
 	s.setupRoutes()
@@ -168,13 +150,7 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		optionState.routerConfigurator(engine, s.handlers, cfg)
 	}
 
-	// Register management routes when configuration or environment secrets are available,
-	// or when a local management password is provided (e.g. TUI mode).
-	hasManagementSecret := cfg.RemoteManagement.SecretKey != "" || envManagementSecret || s.localPassword != ""
-	s.managementRoutesEnabled.Store(hasManagementSecret)
-	if hasManagementSecret {
-		s.registerManagementRoutes()
-	}
+	s.registerManagementRoutes()
 
 	if optionState.keepAliveEnabled {
 		s.enableKeepAlive(optionState.keepAliveTimeout, optionState.keepAliveOnTimeout)

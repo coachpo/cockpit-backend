@@ -1,9 +1,6 @@
 package api
 
 import (
-	"crypto/subtle"
-	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,25 +24,8 @@ func (s *Server) enableKeepAlive(timeout time.Duration, onTimeout func()) {
 }
 
 func (s *Server) handleKeepAlive(c *gin.Context) {
-	if s.localPassword != "" {
-		provided := strings.TrimSpace(c.GetHeader("Authorization"))
-		if provided != "" {
-			parts := strings.SplitN(provided, " ", 2)
-			if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
-				provided = parts[1]
-			}
-		}
-		if provided == "" {
-			provided = strings.TrimSpace(c.GetHeader("X-Local-Password"))
-		}
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(s.localPassword)) != 1 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid password"})
-			return
-		}
-	}
-
 	s.signalKeepAlive()
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	c.JSON(200, gin.H{"status": "ok"})
 }
 
 func (s *Server) signalKeepAlive() {

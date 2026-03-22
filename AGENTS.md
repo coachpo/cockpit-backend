@@ -5,7 +5,7 @@
 **Branch:** main
 
 ## OVERVIEW
-Cockpit v6 is a Go 1.26 proxy plus embeddable SDK centered on Codex OAuth, OpenAI-compatible upstream routing, hot-reloadable config/auth state, and websocket relay. `cmd/` stays thin around the `cockpit` binary, `internal/` owns runtime and support details, and `sdk/` exposes the reusable service/auth/handler surface.
+Cockpit v6 is a Go 1.26 proxy plus embeddable SDK centered on Codex OAuth, an OpenAI-compatible HTTP surface, hot-reloadable config/auth state, and websocket relay. `cmd/` stays thin around the `cockpit` binary, `internal/` owns runtime and support details, and `sdk/` exposes the reusable service/auth/handler surface.
 
 ## HIERARCHY RULE
 Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not restatements of the root file.
@@ -42,7 +42,7 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 | Model catalog | `internal/registry/` | dynamic registry plus embedded catalog lookup |
 | Hot reload | `internal/watcher/` | reload, synthesis, diff, dispatch |
 | Thinking normalization | `internal/thinking/` | parse, validate, and apply reasoning config |
-| Provider execution | `internal/runtime/executor/` | Codex + OpenAI-compatible bridges and proxy-aware helpers |
+| Provider execution | `internal/runtime/executor/` | Codex execution bridge and proxy-aware helpers |
 | Translator system | `internal/translator/`, `sdk/translator/` | side-effect registrations over public format contracts |
 | Websocket relay gateway | `internal/wsrelay/` | provider sessions, request multiplexing, stream relay |
 | Public embed API | `sdk/cliproxy/` | `Builder`, `Service`, watcher/auth integration |

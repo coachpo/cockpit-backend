@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
-	"reflect"
 	"time"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
@@ -83,36 +82,40 @@ func (w *Watcher) reloadConfigFromSource(newConfig *config.Config) {
 	}
 	log.Debug("=========================== CONFIG RELOAD (from source) ============================")
 
-	w.clientsMutex.Lock()
 	var oldConfig *config.Config
+	w.clientsMutex.RLock()
 	_ = yaml.Unmarshal(w.oldConfigYaml, &oldConfig)
+	w.clientsMutex.RUnlock()
+
+	var details []string
+	if oldConfig != nil {
+		details = diff.BuildConfigChangeDetails(oldConfig, newConfig)
+		if len(details) == 0 {
+			log.Debug("no material config field changes detected from source")
+			return
+		}
+	}
+
+	w.clientsMutex.Lock()
 	w.oldConfigYaml, _ = yaml.Marshal(newConfig)
 	w.config = newConfig
 	w.clientsMutex.Unlock()
 
-	var affectedOAuthProviders []string
-	if oldConfig != nil {
-		_, affectedOAuthProviders = diff.DiffOAuthExcludedModelChanges(oldConfig.OAuthExcludedModels, newConfig.OAuthExcludedModels)
-	}
-
 	util.SetLogLevel(newConfig)
 
-	if oldConfig != nil {
-		details := diff.BuildConfigChangeDetails(oldConfig, newConfig)
-		if len(details) > 0 {
-			log.Debugf("config changes detected:")
-			for _, d := range details {
-				log.Debugf("  %s", d)
-			}
+	if len(details) > 0 {
+		log.Debugf("config changes detected:")
+		for _, d := range details {
+			log.Debugf("  %s", d)
 		}
 	}
 
 	authDirChanged := oldConfig == nil || oldConfig.AuthDir != newConfig.AuthDir
 	retryConfigChanged := oldConfig != nil && (oldConfig.RequestRetry != newConfig.RequestRetry || oldConfig.MaxRetryInterval != newConfig.MaxRetryInterval || oldConfig.MaxRetryCredentials != newConfig.MaxRetryCredentials)
-	forceAuthRefresh := oldConfig != nil && (oldConfig.ForceModelPrefix != newConfig.ForceModelPrefix || !reflect.DeepEqual(oldConfig.OAuthModelAlias, newConfig.OAuthModelAlias) || retryConfigChanged)
+	forceAuthRefresh := oldConfig != nil && retryConfigChanged
 
 	log.Infof("config reloaded from source, triggering client reload")
-	w.reloadClients(authDirChanged, affectedOAuthProviders, forceAuthRefresh)
+	w.reloadClients(authDirChanged, forceAuthRefresh)
 }
 
 func (w *Watcher) reloadAuthsFromStore(auths []*coreauth.Auth) {
@@ -130,7 +133,7 @@ func (w *Watcher) reloadAuthsFromStore(auths []*coreauth.Auth) {
 		}
 	}
 	w.clientsMutex.Unlock()
-	w.reloadClients(false, nil, true)
+	w.reloadClients(false, true)
 }
 
 func (w *Watcher) reloadConfig() bool {
@@ -156,15 +159,7 @@ func (w *Watcher) reloadConfig() bool {
 	w.config = newConfig
 	w.clientsMutex.Unlock()
 
-	var affectedOAuthProviders []string
-	if oldConfig != nil {
-		_, affectedOAuthProviders = diff.DiffOAuthExcludedModelChanges(oldConfig.OAuthExcludedModels, newConfig.OAuthExcludedModels)
-	}
-
 	util.SetLogLevel(newConfig)
-	if oldConfig != nil && oldConfig.Debug != newConfig.Debug {
-		log.Debugf("log level updated - debug mode changed from %t to %t", oldConfig.Debug, newConfig.Debug)
-	}
 
 	if oldConfig != nil {
 		details := diff.BuildConfigChangeDetails(oldConfig, newConfig)
@@ -180,9 +175,9 @@ func (w *Watcher) reloadConfig() bool {
 
 	authDirChanged := oldConfig == nil || oldConfig.AuthDir != newConfig.AuthDir
 	retryConfigChanged := oldConfig != nil && (oldConfig.RequestRetry != newConfig.RequestRetry || oldConfig.MaxRetryInterval != newConfig.MaxRetryInterval || oldConfig.MaxRetryCredentials != newConfig.MaxRetryCredentials)
-	forceAuthRefresh := oldConfig != nil && (oldConfig.ForceModelPrefix != newConfig.ForceModelPrefix || !reflect.DeepEqual(oldConfig.OAuthModelAlias, newConfig.OAuthModelAlias) || retryConfigChanged)
+	forceAuthRefresh := oldConfig != nil && retryConfigChanged
 
 	log.Infof("config successfully reloaded, triggering client reload")
-	w.reloadClients(authDirChanged, affectedOAuthProviders, forceAuthRefresh)
+	w.reloadClients(authDirChanged, forceAuthRefresh)
 	return true
 }

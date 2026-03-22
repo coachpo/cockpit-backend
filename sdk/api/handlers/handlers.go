@@ -1,11 +1,7 @@
-// Package handlers provides core API handler functionality for the Cockpit server.
-// It includes common types, client management, load balancing, and error handling
-// shared across all API endpoint handlers (OpenAI, Claude, Gemini).
+// Package handlers provides shared request/context helpers for SDK API handlers.
 package handlers
 
 import (
-	"bytes"
-
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/interfaces"
 	"github.com/coachpo/cockpit-backend/internal/logging"
@@ -14,9 +10,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-// BaseAPIHandler contains the handlers for API endpoints.
-// It holds a pool of clients to interact with the backend service and manages
-// load balancing, client selection, and configuration.
+// BaseAPIHandler holds shared dependencies used by concrete SDK API handlers.
 type BaseAPIHandler struct {
 	// AuthManager manages auth lifecycle and execution in the new architecture.
 	AuthManager *coreauth.Manager
@@ -25,15 +19,14 @@ type BaseAPIHandler struct {
 	Cfg *config.SDKConfig
 }
 
-// NewBaseAPIHandlers creates a new API handlers instance.
-// It takes a slice of clients and configuration as input.
+// NewBaseAPIHandlers creates the shared handler dependency container.
 //
 // Parameters:
-//   - cliClients: A slice of AI service clients
 //   - cfg: The application configuration
+//   - authManager: The auth/execution manager used by concrete handlers
 //
 // Returns:
-//   - *BaseAPIHandler: A new API handlers instance
+//   - *BaseAPIHandler: A shared base handler
 func NewBaseAPIHandlers(cfg *config.SDKConfig, authManager *coreauth.Manager) *BaseAPIHandler {
 	return &BaseAPIHandler{
 		Cfg:         cfg,
@@ -41,13 +34,11 @@ func NewBaseAPIHandlers(cfg *config.SDKConfig, authManager *coreauth.Manager) *B
 	}
 }
 
-// UpdateClients updates the handlers' client list and configuration.
-// This method is called when the configuration or authentication tokens change.
+// UpdateConfig updates the shared SDK configuration reference.
 //
 // Parameters:
-//   - clients: The new slice of AI service clients
 //   - cfg: The new application configuration
-func (h *BaseAPIHandler) UpdateClients(cfg *config.SDKConfig) { h.Cfg = cfg }
+func (h *BaseAPIHandler) UpdateConfig(cfg *config.SDKConfig) { h.Cfg = cfg }
 
 // GetAlt extracts the 'alt' parameter from the request query string.
 // It checks both 'alt' and '$alt' parameters and returns the appropriate value.
@@ -70,9 +61,7 @@ func (h *BaseAPIHandler) GetAlt(c *gin.Context) string {
 	return alt
 }
 
-// GetContextWithCancel creates a new context with cancellation capabilities.
-// It embeds the Gin context and the API handler into the new context for later use.
-// The returned cancel function also handles logging the API response if request logging is enabled.
+// GetContextWithCancel derives a cancelable request context and stores request-scoped values on it.
 //
 // Parameters:
 //   - handler: The API handler associated with the request.
@@ -113,62 +102,16 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	newCtx = context.WithValue(newCtx, "gin", c)
 	newCtx = context.WithValue(newCtx, "handler", handler)
 	return newCtx, func(params ...interface{}) {
-		if h.Cfg.RequestLog && len(params) == 1 {
-			if existing, exists := c.Get("API_RESPONSE"); exists {
-				if existingBytes, ok := existing.([]byte); ok && len(bytes.TrimSpace(existingBytes)) > 0 {
-					switch params[0].(type) {
-					case error, string:
-						cancel()
-						return
-					}
-				}
-			}
-
-			var payload []byte
-			switch data := params[0].(type) {
-			case []byte:
-				payload = data
-			case error:
-				if data != nil {
-					payload = []byte(data.Error())
-				}
-			case string:
-				payload = []byte(data)
-			}
-			if len(payload) > 0 {
-				if existing, exists := c.Get("API_RESPONSE"); exists {
-					if existingBytes, ok := existing.([]byte); ok && len(existingBytes) > 0 {
-						trimmedPayload := bytes.TrimSpace(payload)
-						if len(trimmedPayload) > 0 && bytes.Contains(existingBytes, trimmedPayload) {
-							cancel()
-							return
-						}
-					}
-				}
-				appendAPIResponse(c, payload)
-			}
-		}
-
+		_ = params
 		cancel()
 	}
 }
 
 func (h *BaseAPIHandler) LoggingAPIResponseError(ctx context.Context, err *interfaces.ErrorMessage) {
-	if h.Cfg.RequestLog {
-		if ginContext, ok := ctx.Value("gin").(*gin.Context); ok {
-			if apiResponseErrors, isExist := ginContext.Get("API_RESPONSE_ERROR"); isExist {
-				if slicesAPIResponseError, isOk := apiResponseErrors.([]*interfaces.ErrorMessage); isOk {
-					slicesAPIResponseError = append(slicesAPIResponseError, err)
-					ginContext.Set("API_RESPONSE_ERROR", slicesAPIResponseError)
-				}
-			} else {
-				// Create new response data entry
-				ginContext.Set("API_RESPONSE_ERROR", []*interfaces.ErrorMessage{err})
-			}
-		}
-	}
+	_ = h
+	_ = ctx
+	_ = err
 }
 
-// APIHandlerCancelFunc is a function type for canceling an API handler's context.
-// It can optionally accept parameters, which are used for logging the response.
+// APIHandlerCancelFunc cancels a handler context.
 type APIHandlerCancelFunc func(params ...interface{})

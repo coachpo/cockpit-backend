@@ -18,7 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string, forceAuthRefresh bool) {
+func (w *Watcher) reloadClients(rescanAuth bool, forceAuthRefresh bool) {
 	log.Debugf("starting full client load process")
 
 	w.clientsMutex.RLock()
@@ -30,30 +30,8 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 		return
 	}
 
-	if len(affectedOAuthProviders) > 0 {
-		w.clientsMutex.Lock()
-		if w.currentAuths != nil {
-			filtered := make(map[string]*coreauth.Auth, len(w.currentAuths))
-			for id, auth := range w.currentAuths {
-				if auth == nil {
-					continue
-				}
-				provider := strings.ToLower(strings.TrimSpace(auth.Provider))
-				if _, match := matchProvider(provider, affectedOAuthProviders); match {
-					continue
-				}
-				filtered[id] = auth
-			}
-			w.currentAuths = filtered
-			log.Debugf("applying oauth-excluded-models to providers %v", affectedOAuthProviders)
-		} else {
-			w.currentAuths = nil
-		}
-		w.clientsMutex.Unlock()
-	}
-
-	codexAPIKeyCount, openAICompatCount := BuildAPIKeyClients(cfg)
-	totalAPIKeyClients := codexAPIKeyCount + openAICompatCount
+	codexAPIKeyCount := BuildAPIKeyClients(cfg)
+	totalAPIKeyClients := codexAPIKeyCount
 	log.Debugf("loaded %d API key clients", totalAPIKeyClients)
 
 	var authFileCount int
@@ -109,7 +87,7 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 		w.clientsMutex.Unlock()
 	}
 
-	totalNewClients := authFileCount + codexAPIKeyCount + openAICompatCount
+	totalNewClients := authFileCount + codexAPIKeyCount
 
 	if w.reloadCallback != nil {
 		log.Debugf("triggering server update callback before auth refresh")
@@ -118,11 +96,10 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 
 	w.refreshAuthState(forceAuthRefresh)
 
-	log.Infof("full client load complete - %d clients (%d auth files + %d Codex keys + %d OpenAI-compat)",
+	log.Infof("full client load complete - %d clients (%d auth files + %d Codex keys)",
 		totalNewClients,
 		authFileCount,
 		codexAPIKeyCount,
-		openAICompatCount,
 	)
 }
 
@@ -299,29 +276,13 @@ func (w *Watcher) loadFileClients(cfg *config.Config) int {
 	return authFileCount
 }
 
-func BuildAPIKeyClients(cfg *config.Config) (int, int) {
+func BuildAPIKeyClients(cfg *config.Config) int {
 	codexAPIKeyCount := 0
-	openAICompatCount := 0
 
 	if len(cfg.CodexKey) > 0 {
 		codexAPIKeyCount += len(cfg.CodexKey)
 	}
-	if len(cfg.OpenAICompatibility) > 0 {
-		for _, compatConfig := range cfg.OpenAICompatibility {
-			openAICompatCount += len(compatConfig.APIKeyEntries)
-		}
-	}
-	return codexAPIKeyCount, openAICompatCount
-}
-
-func matchProvider(provider string, targets []string) (string, bool) {
-	p := strings.ToLower(strings.TrimSpace(provider))
-	for _, t := range targets {
-		if strings.EqualFold(p, strings.TrimSpace(t)) {
-			return p, true
-		}
-	}
-	return p, false
+	return codexAPIKeyCount
 }
 
 func (w *Watcher) normalizeAuthPath(path string) string {

@@ -3,8 +3,8 @@ package cliproxy
 import (
 	"testing"
 
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/coachpo/cockpit-backend/internal/config"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 )
 
 func TestEnsureExecutorsForAuth_CodexDoesNotReplaceInNormalMode(t *testing.T) {
@@ -60,5 +60,23 @@ func TestEnsureExecutorsForAuthWithMode_CodexForceReplace(t *testing.T) {
 
 	if firstExecutor == secondExecutor {
 		t.Fatal("expected codex executor replacement in force mode")
+	}
+}
+
+func TestEnsureExecutorsForAuth_NonCodexDoesNotRegisterExecutor(t *testing.T) {
+	service := &Service{
+		cfg:         &config.Config{},
+		coreManager: coreauth.NewManager(nil, nil, nil),
+	}
+	auth := &coreauth.Auth{
+		ID:       "gemini-auth-1",
+		Provider: "gemini",
+		Status:   coreauth.StatusActive,
+	}
+
+	service.ensureExecutorsForAuth(auth)
+
+	if executor, ok := service.coreManager.Executor("gemini"); ok || executor != nil {
+		t.Fatal("expected non-codex auth to leave gemini executor unregistered")
 	}
 }

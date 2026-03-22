@@ -5,9 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/coachpo/cockpit-backend/internal/config"
 	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
 )
 
 func TestNewProxyAwareHTTPClientDirectBypassesGlobalProxy(t *testing.T) {
@@ -15,7 +13,6 @@ func TestNewProxyAwareHTTPClientDirectBypassesGlobalProxy(t *testing.T) {
 
 	client := newProxyAwareHTTPClient(
 		context.Background(),
-		&config.Config{SDKConfig: sdkconfig.SDKConfig{ProxyURL: "http://global-proxy.example.com:8080"}},
 		&cliproxyauth.Auth{ProxyURL: "direct"},
 		0,
 	)

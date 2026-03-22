@@ -6,11 +6,9 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
@@ -20,91 +18,37 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type attemptInfo struct {
-	count        int
-	blockedUntil time.Time
-	lastActivity time.Time // track last activity for cleanup
-}
-
-// attemptCleanupInterval controls how often stale IP entries are purged
-const attemptCleanupInterval = 1 * time.Hour
-
-// attemptMaxIdleTime controls how long an IP can be idle before cleanup
-const attemptMaxIdleTime = 2 * time.Hour
-
 // Handler aggregates config reference, persistence path and helpers.
 type Handler struct {
-	cfg                 *config.Config
-	persistedConfig     *config.Config
-	configFilePath      string
-	configSaver         func(*config.Config) error
-	mu                  sync.Mutex
-	attemptsMu          sync.Mutex
-	failedAttempts      map[string]*attemptInfo
-	authManager         *coreauth.Manager
-	authStore           nacos.WatchableAuthStore
-	localPassword       string
-	allowRemoteOverride bool
-	envSecret           string
-	logDir              string
-	postAuthHook        coreauth.PostAuthHook
+	cfg             *config.Config
+	persistedConfig *config.Config
+	configFilePath  string
+	configSaver     func(*config.Config) error
+	mu              sync.Mutex
+	authManager     *coreauth.Manager
+	authStore       nacos.WatchableAuthStore
+	logDir          string
+	postAuthHook    coreauth.PostAuthHook
 }
 
 // NewHandler creates a new management handler instance.
 func NewHandler(cfg *config.Config, configFilePath string, manager *coreauth.Manager, store nacos.WatchableAuthStore) *Handler {
-	envSecret, _ := os.LookupEnv("MANAGEMENT_PASSWORD")
-	envSecret = strings.TrimSpace(envSecret)
 	persistedConfig, _ := cloneConfig(cfg)
 
-	h := &Handler{
-		cfg:                 cfg,
-		persistedConfig:     persistedConfig,
-		configFilePath:      configFilePath,
-		failedAttempts:      make(map[string]*attemptInfo),
-		authManager:         manager,
-		authStore:           store,
-		allowRemoteOverride: envSecret != "",
-		envSecret:           envSecret,
+	return &Handler{
+		cfg:             cfg,
+		persistedConfig: persistedConfig,
+		configFilePath:  configFilePath,
+		authManager:     manager,
+		authStore:       store,
 	}
-	h.startAttemptCleanup()
-	return h
 }
 
-// startAttemptCleanup launches a background goroutine that periodically
-// removes stale IP entries from failedAttempts to prevent memory leaks.
 func (h *Handler) SetConfigSaver(saver func(*config.Config) error) {
 	h.configSaver = saver
 }
 
-func (h *Handler) startAttemptCleanup() {
-	go func() {
-		ticker := time.NewTicker(attemptCleanupInterval)
-		defer ticker.Stop()
-		for range ticker.C {
-			h.purgeStaleAttempts()
-		}
-	}()
-}
-
-// purgeStaleAttempts removes IP entries that have been idle beyond attemptMaxIdleTime
-// and whose ban (if any) has expired.
-func (h *Handler) purgeStaleAttempts() {
-	now := time.Now()
-	h.attemptsMu.Lock()
-	defer h.attemptsMu.Unlock()
-	for ip, ai := range h.failedAttempts {
-		// Skip if still banned
-		if !ai.blockedUntil.IsZero() && now.Before(ai.blockedUntil) {
-			continue
-		}
-		// Remove if idle too long
-		if now.Sub(ai.lastActivity) > attemptMaxIdleTime {
-			delete(h.failedAttempts, ip)
-		}
-	}
-}
-
-// NewHandler creates a new management handler instance.
+// NewHandlerWithoutConfigFilePath creates a management handler without persistence wiring.
 func NewHandlerWithoutConfigFilePath(cfg *config.Config, manager *coreauth.Manager) *Handler {
 	return NewHandler(cfg, "", manager, nil)
 }
@@ -119,9 +63,6 @@ func (h *Handler) SetConfig(cfg *config.Config) {
 func (h *Handler) SetAuthManager(manager *coreauth.Manager) { h.authManager = manager }
 
 func (h *Handler) SetAuthStore(store nacos.WatchableAuthStore) { h.authStore = store }
-
-// SetLocalPassword configures the runtime-local password accepted for localhost requests.
-func (h *Handler) SetLocalPassword(password string) { h.localPassword = password }
 
 // SetLogDirectory updates the directory where main.log should be looked up.
 func (h *Handler) SetLogDirectory(dir string) {
@@ -141,138 +82,48 @@ func (h *Handler) SetPostAuthHook(hook coreauth.PostAuthHook) {
 	h.postAuthHook = hook
 }
 
-// Middleware enforces access control for management endpoints.
-// All requests (local and remote) require a valid management key.
-// Additionally, remote access requires allow-remote-management=true.
+// Middleware enforces Bearer-only access control for management endpoints.
 func (h *Handler) Middleware() gin.HandlerFunc {
-	const maxFailures = 5
-	const banDuration = 30 * time.Minute
-
 	return func(c *gin.Context) {
-		clientIP := c.ClientIP()
-		localClient := clientIP == "127.0.0.1" || clientIP == "::1"
-		cfg := h.cfg
-		var (
-			allowRemote bool
-			secretHash  string
-		)
-		if cfg != nil {
-			allowRemote = cfg.RemoteManagement.AllowRemote
-			secretHash = cfg.RemoteManagement.SecretKey
+		secret := ""
+		if h.cfg != nil {
+			secret = strings.TrimSpace(h.cfg.RemoteManagement.SecretKey)
 		}
-		if h.allowRemoteOverride {
-			allowRemote = true
-		}
-		envSecret := h.envSecret
-
-		fail := func() {}
-		if !localClient {
-			h.attemptsMu.Lock()
-			ai := h.failedAttempts[clientIP]
-			if ai != nil {
-				if !ai.blockedUntil.IsZero() {
-					if time.Now().Before(ai.blockedUntil) {
-						remaining := time.Until(ai.blockedUntil).Round(time.Second)
-						h.attemptsMu.Unlock()
-						c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("IP banned due to too many failed attempts. Try again in %s", remaining)})
-						return
-					}
-					// Ban expired, reset state
-					ai.blockedUntil = time.Time{}
-					ai.count = 0
-				}
-			}
-			h.attemptsMu.Unlock()
-
-			if !allowRemote {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "remote management disabled"})
-				return
-			}
-
-			fail = func() {
-				h.attemptsMu.Lock()
-				aip := h.failedAttempts[clientIP]
-				if aip == nil {
-					aip = &attemptInfo{}
-					h.failedAttempts[clientIP] = aip
-				}
-				aip.count++
-				aip.lastActivity = time.Now()
-				if aip.count >= maxFailures {
-					aip.blockedUntil = time.Now().Add(banDuration)
-					aip.count = 0
-				}
-				h.attemptsMu.Unlock()
-			}
-		}
-		if secretHash == "" && envSecret == "" {
+		if secret == "" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "remote management key not set"})
 			return
 		}
 
-		// Accept either Authorization: Bearer <key> or X-Management-Key
 		var provided string
-		if ah := c.GetHeader("Authorization"); ah != "" {
+		if ah := strings.TrimSpace(c.GetHeader("Authorization")); ah != "" {
 			parts := strings.SplitN(ah, " ", 2)
-			if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
-				provided = parts[1]
-			} else {
-				provided = ah
+			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+				provided = strings.TrimSpace(parts[1])
 			}
-		}
-		if provided == "" {
-			provided = c.GetHeader("X-Management-Key")
 		}
 
 		if provided == "" {
-			if !localClient {
-				fail()
-			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing management key"})
 			return
 		}
 
-		if localClient {
-			if lp := h.localPassword; lp != "" {
-				if subtle.ConstantTimeCompare([]byte(provided), []byte(lp)) == 1 {
-					c.Next()
-					return
-				}
-			}
-		}
-
-		if envSecret != "" && subtle.ConstantTimeCompare([]byte(provided), []byte(envSecret)) == 1 {
-			if !localClient {
-				h.attemptsMu.Lock()
-				if ai := h.failedAttempts[clientIP]; ai != nil {
-					ai.count = 0
-					ai.blockedUntil = time.Time{}
-				}
-				h.attemptsMu.Unlock()
-			}
-			c.Next()
-			return
-		}
-
-		if secretHash == "" || bcrypt.CompareHashAndPassword([]byte(secretHash), []byte(provided)) != nil {
-			if !localClient {
-				fail()
-			}
+		if !managementSecretMatches(secret, provided) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid management key"})
 			return
 		}
 
-		if !localClient {
-			h.attemptsMu.Lock()
-			if ai := h.failedAttempts[clientIP]; ai != nil {
-				ai.count = 0
-				ai.blockedUntil = time.Time{}
-			}
-			h.attemptsMu.Unlock()
-		}
-
 		c.Next()
 	}
+}
+
+func managementSecretMatches(secret string, provided string) bool {
+	if secret == "" || provided == "" {
+		return false
+	}
+	if strings.HasPrefix(secret, "$2a$") || strings.HasPrefix(secret, "$2b$") || strings.HasPrefix(secret, "$2y$") {
+		return bcrypt.CompareHashAndPassword([]byte(secret), []byte(provided)) == nil
+	}
+	return subtle.ConstantTimeCompare([]byte(secret), []byte(provided)) == 1
 }
 
 func cloneConfig(cfg *config.Config) (*config.Config, error) {

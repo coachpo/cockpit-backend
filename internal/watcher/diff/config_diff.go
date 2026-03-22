@@ -2,7 +2,6 @@ package diff
 
 import (
 	"fmt"
-	"net/url"
 	"reflect"
 	"strings"
 
@@ -17,21 +16,18 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 		return changes
 	}
 
-	// Simple scalars
+	if oldCfg.Host != newCfg.Host {
+		changes = append(changes, fmt.Sprintf("host: %s -> %s", oldCfg.Host, newCfg.Host))
+	}
+
 	if oldCfg.Port != newCfg.Port {
 		changes = append(changes, fmt.Sprintf("port: %d -> %d", oldCfg.Port, newCfg.Port))
 	}
 	if oldCfg.AuthDir != newCfg.AuthDir {
 		changes = append(changes, fmt.Sprintf("auth-dir: %s -> %s", oldCfg.AuthDir, newCfg.AuthDir))
 	}
-	if oldCfg.Debug != newCfg.Debug {
-		changes = append(changes, fmt.Sprintf("debug: %t -> %t", oldCfg.Debug, newCfg.Debug))
-	}
 	if oldCfg.DisableCooling != newCfg.DisableCooling {
 		changes = append(changes, fmt.Sprintf("disable-cooling: %t -> %t", oldCfg.DisableCooling, newCfg.DisableCooling))
-	}
-	if oldCfg.RequestLog != newCfg.RequestLog {
-		changes = append(changes, fmt.Sprintf("request-log: %t -> %t", oldCfg.RequestLog, newCfg.RequestLog))
 	}
 	if oldCfg.RequestRetry != newCfg.RequestRetry {
 		changes = append(changes, fmt.Sprintf("request-retry: %d -> %d", oldCfg.RequestRetry, newCfg.RequestRetry))
@@ -42,14 +38,17 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 	if oldCfg.MaxRetryInterval != newCfg.MaxRetryInterval {
 		changes = append(changes, fmt.Sprintf("max-retry-interval: %d -> %d", oldCfg.MaxRetryInterval, newCfg.MaxRetryInterval))
 	}
-	if oldCfg.ProxyURL != newCfg.ProxyURL {
-		changes = append(changes, fmt.Sprintf("proxy-url: %s -> %s", formatProxyURL(oldCfg.ProxyURL), formatProxyURL(newCfg.ProxyURL)))
-	}
 	if oldCfg.WebsocketAuth != newCfg.WebsocketAuth {
 		changes = append(changes, fmt.Sprintf("ws-auth: %t -> %t", oldCfg.WebsocketAuth, newCfg.WebsocketAuth))
 	}
-	if oldCfg.ForceModelPrefix != newCfg.ForceModelPrefix {
-		changes = append(changes, fmt.Sprintf("force-model-prefix: %t -> %t", oldCfg.ForceModelPrefix, newCfg.ForceModelPrefix))
+	if oldCfg.PassthroughHeaders != newCfg.PassthroughHeaders {
+		changes = append(changes, fmt.Sprintf("passthrough-headers: %t -> %t", oldCfg.PassthroughHeaders, newCfg.PassthroughHeaders))
+	}
+	if oldCfg.Streaming.KeepAliveSeconds != newCfg.Streaming.KeepAliveSeconds {
+		changes = append(changes, fmt.Sprintf("streaming.keepalive-seconds: %d -> %d", oldCfg.Streaming.KeepAliveSeconds, newCfg.Streaming.KeepAliveSeconds))
+	}
+	if oldCfg.Streaming.BootstrapRetries != newCfg.Streaming.BootstrapRetries {
+		changes = append(changes, fmt.Sprintf("streaming.bootstrap-retries: %d -> %d", oldCfg.Streaming.BootstrapRetries, newCfg.Streaming.BootstrapRetries))
 	}
 	if oldCfg.NonStreamKeepAliveInterval != newCfg.NonStreamKeepAliveInterval {
 		changes = append(changes, fmt.Sprintf("nonstream-keepalive-interval: %d -> %d", oldCfg.NonStreamKeepAliveInterval, newCfg.NonStreamKeepAliveInterval))
@@ -59,10 +58,6 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 	if oldCfg.QuotaExceeded.SwitchProject != newCfg.QuotaExceeded.SwitchProject {
 		changes = append(changes, fmt.Sprintf("quota-exceeded.switch-project: %t -> %t", oldCfg.QuotaExceeded.SwitchProject, newCfg.QuotaExceeded.SwitchProject))
 	}
-	if oldCfg.QuotaExceeded.SwitchPreviewModel != newCfg.QuotaExceeded.SwitchPreviewModel {
-		changes = append(changes, fmt.Sprintf("quota-exceeded.switch-preview-model: %t -> %t", oldCfg.QuotaExceeded.SwitchPreviewModel, newCfg.QuotaExceeded.SwitchPreviewModel))
-	}
-
 	if oldCfg.Routing.Strategy != newCfg.Routing.Strategy {
 		changes = append(changes, fmt.Sprintf("routing.strategy: %s -> %s", oldCfg.Routing.Strategy, newCfg.Routing.Strategy))
 	}
@@ -83,39 +78,25 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 			if strings.TrimSpace(o.BaseURL) != strings.TrimSpace(n.BaseURL) {
 				changes = append(changes, fmt.Sprintf("codex[%d].base-url: %s -> %s", i, strings.TrimSpace(o.BaseURL), strings.TrimSpace(n.BaseURL)))
 			}
-			if strings.TrimSpace(o.ProxyURL) != strings.TrimSpace(n.ProxyURL) {
-				changes = append(changes, fmt.Sprintf("codex[%d].proxy-url: %s -> %s", i, formatProxyURL(o.ProxyURL), formatProxyURL(n.ProxyURL)))
-			}
-			if strings.TrimSpace(o.Prefix) != strings.TrimSpace(n.Prefix) {
-				changes = append(changes, fmt.Sprintf("codex[%d].prefix: %s -> %s", i, strings.TrimSpace(o.Prefix), strings.TrimSpace(n.Prefix)))
-			}
 			if o.Websockets != n.Websockets {
 				changes = append(changes, fmt.Sprintf("codex[%d].websockets: %t -> %t", i, o.Websockets, n.Websockets))
 			}
 			if strings.TrimSpace(o.APIKey) != strings.TrimSpace(n.APIKey) {
 				changes = append(changes, fmt.Sprintf("codex[%d].api-key: updated", i))
 			}
+			if o.Priority != n.Priority {
+				changes = append(changes, fmt.Sprintf("codex[%d].priority: %d -> %d", i, o.Priority, n.Priority))
+			}
 			if !equalStringMap(o.Headers, n.Headers) {
 				changes = append(changes, fmt.Sprintf("codex[%d].headers: updated", i))
 			}
-			oldModels := SummarizeCodexModels(o.Models)
-			newModels := SummarizeCodexModels(n.Models)
-			if oldModels.hash != newModels.hash {
-				changes = append(changes, fmt.Sprintf("codex[%d].models: updated (%d -> %d entries)", i, oldModels.count, newModels.count))
-			}
-			oldExcluded := SummarizeExcludedModels(o.ExcludedModels)
-			newExcluded := SummarizeExcludedModels(n.ExcludedModels)
-			if oldExcluded.hash != newExcluded.hash {
-				changes = append(changes, fmt.Sprintf("codex[%d].excluded-models: updated (%d -> %d entries)", i, oldExcluded.count, newExcluded.count))
-			}
 		}
 	}
-
-	if entries, _ := DiffOAuthExcludedModelChanges(oldCfg.OAuthExcludedModels, newCfg.OAuthExcludedModels); len(entries) > 0 {
-		changes = append(changes, entries...)
+	if oldCfg.CodexHeaderDefaults.UserAgent != newCfg.CodexHeaderDefaults.UserAgent {
+		changes = append(changes, fmt.Sprintf("codex-header-defaults.user-agent: %s -> %s", oldCfg.CodexHeaderDefaults.UserAgent, newCfg.CodexHeaderDefaults.UserAgent))
 	}
-	if entries, _ := DiffOAuthModelAliasChanges(oldCfg.OAuthModelAlias, newCfg.OAuthModelAlias); len(entries) > 0 {
-		changes = append(changes, entries...)
+	if oldCfg.CodexHeaderDefaults.BetaFeatures != newCfg.CodexHeaderDefaults.BetaFeatures {
+		changes = append(changes, fmt.Sprintf("codex-header-defaults.beta-features: %s -> %s", oldCfg.CodexHeaderDefaults.BetaFeatures, newCfg.CodexHeaderDefaults.BetaFeatures))
 	}
 
 	// Remote management (never print the key)
@@ -128,16 +109,8 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 			changes = append(changes, "remote-management.secret-key: created")
 		case oldCfg.RemoteManagement.SecretKey != "" && newCfg.RemoteManagement.SecretKey == "":
 			changes = append(changes, "remote-management.secret-key: deleted")
-		default:
+		case !looksLikeBcrypt(oldCfg.RemoteManagement.SecretKey) || !looksLikeBcrypt(newCfg.RemoteManagement.SecretKey):
 			changes = append(changes, "remote-management.secret-key: updated")
-		}
-	}
-
-	// OpenAI compatibility providers (summarized)
-	if compat := DiffOpenAICompatibility(oldCfg.OpenAICompatibility, newCfg.OpenAICompatibility); len(compat) > 0 {
-		changes = append(changes, "openai-compatibility:")
-		for _, c := range compat {
-			changes = append(changes, "  "+c)
 		}
 	}
 
@@ -164,30 +137,6 @@ func equalStringMap(a, b map[string]string) bool {
 	return true
 }
 
-func formatProxyURL(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "<none>"
-	}
-	parsed, err := url.Parse(trimmed)
-	if err != nil {
-		return "<redacted>"
-	}
-	host := strings.TrimSpace(parsed.Host)
-	scheme := strings.TrimSpace(parsed.Scheme)
-	if host == "" {
-		// Allow host:port style without scheme.
-		parsed2, err2 := url.Parse("http://" + trimmed)
-		if err2 == nil {
-			host = strings.TrimSpace(parsed2.Host)
-		}
-		scheme = ""
-	}
-	if host == "" {
-		return "<redacted>"
-	}
-	if scheme == "" {
-		return host
-	}
-	return scheme + "://" + host
+func looksLikeBcrypt(s string) bool {
+	return len(s) > 4 && (s[:4] == "$2a$" || s[:4] == "$2b$" || s[:4] == "$2y$")
 }

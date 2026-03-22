@@ -3,6 +3,7 @@ package diff
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
@@ -41,4 +42,31 @@ func BuildAuthChangeDetails(oldAuth, newAuth *coreauth.Auth) []string {
 	}
 
 	return changes
+}
+
+func formatProxyURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "<none>"
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return "<redacted>"
+	}
+	host := strings.TrimSpace(parsed.Host)
+	scheme := strings.TrimSpace(parsed.Scheme)
+	if host == "" {
+		parsed2, err2 := url.Parse("http://" + trimmed)
+		if err2 == nil {
+			host = strings.TrimSpace(parsed2.Host)
+		}
+		scheme = ""
+	}
+	if host == "" {
+		return "<redacted>"
+	}
+	if scheme == "" {
+		return host
+	}
+	return scheme + "://" + host
 }

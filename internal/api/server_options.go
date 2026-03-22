@@ -13,7 +13,6 @@ type serverOptionConfig struct {
 	extraMiddleware    []gin.HandlerFunc
 	engineConfigurator func(*gin.Engine)
 	routerConfigurator func(*gin.Engine, *handlers.BaseAPIHandler, *config.Config)
-	localPassword      string
 	configSaver        func(*config.Config) error
 	keepAliveEnabled   bool
 	keepAliveTimeout   time.Duration
@@ -42,13 +41,6 @@ func WithEngineConfigurator(fn func(*gin.Engine)) ServerOption {
 func WithRouterConfigurator(fn func(*gin.Engine, *handlers.BaseAPIHandler, *config.Config)) ServerOption {
 	return func(cfg *serverOptionConfig) {
 		cfg.routerConfigurator = fn
-	}
-}
-
-// WithLocalManagementPassword stores a runtime-only management password accepted for localhost requests.
-func WithLocalManagementPassword(password string) ServerOption {
-	return func(cfg *serverOptionConfig) {
-		cfg.localPassword = password
 	}
 }
 

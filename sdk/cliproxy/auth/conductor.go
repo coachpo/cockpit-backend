@@ -96,11 +96,8 @@ type Manager struct {
 	maxRetryCredentials atomic.Int32
 	maxRetryInterval    atomic.Int64
 
-	oauthModelAlias  atomic.Value
-	apiKeyModelAlias atomic.Value
-	modelPoolOffsets map[string]int
-	runtimeConfig    atomic.Value
-	rtProvider       RoundTripperProvider
+	runtimeConfig atomic.Value
+	rtProvider    RoundTripperProvider
 
 	refreshCancel    context.CancelFunc
 	refreshSemaphore chan struct{}
@@ -120,11 +117,9 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
 		hook:             hook,
 		auths:            make(map[string]*Auth),
 		providerOffsets:  make(map[string]int),
-		modelPoolOffsets: make(map[string]int),
 		refreshSemaphore: make(chan struct{}, refreshMaxConcurrency),
 	}
 	manager.runtimeConfig.Store(&internalconfig.Config{})
-	manager.apiKeyModelAlias.Store(apiKeyModelAliasTable(nil))
 	manager.scheduler = newAuthScheduler(selector)
 	return manager
 }
@@ -203,7 +198,6 @@ func (m *Manager) SetConfig(cfg *internalconfig.Config) {
 		cfg = &internalconfig.Config{}
 	}
 	m.runtimeConfig.Store(cfg)
-	m.rebuildAPIKeyModelAliasFromRuntimeConfig()
 }
 
 func (m *Manager) SetRetryConfig(retry int, maxRetryInterval time.Duration, maxRetryCredentials int) {
@@ -269,7 +263,6 @@ func (m *Manager) Register(ctx context.Context, auth *Auth) (*Auth, error) {
 	m.mu.Lock()
 	m.auths[auth.ID] = authClone
 	m.mu.Unlock()
-	m.rebuildAPIKeyModelAliasFromRuntimeConfig()
 	if m.scheduler != nil {
 		m.scheduler.upsertAuth(authClone)
 	}
@@ -296,7 +289,6 @@ func (m *Manager) Update(ctx context.Context, auth *Auth) (*Auth, error) {
 	authClone := auth.Clone()
 	m.auths[auth.ID] = authClone
 	m.mu.Unlock()
-	m.rebuildAPIKeyModelAliasFromRuntimeConfig()
 	if m.scheduler != nil {
 		m.scheduler.upsertAuth(authClone)
 	}
@@ -317,8 +309,6 @@ func (m *Manager) Unregister(ctx context.Context, id string) {
 	m.mu.Lock()
 	delete(m.auths, id)
 	m.mu.Unlock()
-
-	m.rebuildAPIKeyModelAliasFromRuntimeConfig()
 	if m.scheduler != nil {
 		m.scheduler.removeAuth(id)
 	}
@@ -351,7 +341,6 @@ func (m *Manager) Load(ctx context.Context) error {
 	if cfg == nil {
 		cfg = &internalconfig.Config{}
 	}
-	m.rebuildAPIKeyModelAliasLocked(cfg)
 	m.mu.Unlock()
 	m.syncScheduler()
 	return nil

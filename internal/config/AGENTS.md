@@ -14,7 +14,7 @@ Config schema and lifecycle. The config package is now split by concern across s
 ## LOCAL CONVENTIONS
 - New provider config needs a `*Key` struct, sanitize path, and wiring into load/save flow.
 - Keep `config.example.yaml` aligned with behavior here.
-- Global OAuth alias and exclusion maps live here; document whether a feature is config-wide or credential-specific.
+- Removed OAuth alias and exclusion maps should not be reintroduced here; config now exposes direct runtime settings only.
 - Persist through `ConfigSource.SaveConfig`; static mode must stay read-only and Nacos mode owns mutations.
 
 ## CROSS-SUBSYSTEM IMPACT

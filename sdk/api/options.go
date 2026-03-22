@@ -7,10 +7,10 @@ package api
 import (
 	"time"
 
-	"github.com/gin-gonic/gin"
 	internalapi "github.com/coachpo/cockpit-backend/internal/api"
-	"github.com/coachpo/cockpit-backend/sdk/api/handlers"
 	"github.com/coachpo/cockpit-backend/internal/config"
+	"github.com/coachpo/cockpit-backend/sdk/api/handlers"
+	"github.com/gin-gonic/gin"
 )
 
 // ServerOption customises HTTP server construction.
@@ -27,11 +27,6 @@ func WithEngineConfigurator(fn func(*gin.Engine)) ServerOption {
 // WithRouterConfigurator appends a callback after default routes are registered.
 func WithRouterConfigurator(fn func(*gin.Engine, *handlers.BaseAPIHandler, *config.Config)) ServerOption {
 	return internalapi.WithRouterConfigurator(fn)
-}
-
-// WithLocalManagementPassword stores a runtime-only management password accepted for localhost requests.
-func WithLocalManagementPassword(password string) ServerOption {
-	return internalapi.WithLocalManagementPassword(password)
 }
 
 // WithKeepAliveEndpoint enables a keep-alive endpoint with the provided timeout and callback.

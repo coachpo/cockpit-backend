@@ -191,26 +191,6 @@ func (s *Service) applyRetryConfig(cfg *config.Config) {
 	s.coreManager.SetRetryConfig(cfg.RequestRetry, maxInterval, cfg.MaxRetryCredentials)
 }
 
-func openAICompatInfoFromAuth(a *coreauth.Auth) (providerKey string, compatName string, ok bool) {
-	if a == nil {
-		return "", "", false
-	}
-	if len(a.Attributes) > 0 {
-		providerKey = strings.TrimSpace(a.Attributes["provider_key"])
-		compatName = strings.TrimSpace(a.Attributes["compat_name"])
-		if compatName != "" {
-			if providerKey == "" {
-				providerKey = compatName
-			}
-			return strings.ToLower(providerKey), compatName, true
-		}
-	}
-	if strings.EqualFold(strings.TrimSpace(a.Provider), "openai-compatibility") {
-		return "openai-compatibility", strings.TrimSpace(a.Label), true
-	}
-	return "", "", false
-}
-
 func (s *Service) ensureExecutorsForAuth(a *coreauth.Auth) {
 	s.ensureExecutorsForAuthWithMode(a, false)
 }
@@ -232,24 +212,10 @@ func (s *Service) ensureExecutorsForAuthWithMode(a *coreauth.Auth, forceReplace 
 		s.coreManager.RegisterExecutor(executor.NewCodexAutoExecutor(s.cfg))
 		return
 	}
-	if a.Disabled {
-		return
-	}
-	if compatProviderKey, _, isCompat := openAICompatInfoFromAuth(a); isCompat {
-		if compatProviderKey == "" {
-			compatProviderKey = strings.ToLower(strings.TrimSpace(a.Provider))
-		}
-		if compatProviderKey == "" {
-			compatProviderKey = "openai-compatibility"
-		}
-		s.coreManager.RegisterExecutor(executor.NewOpenAICompatExecutor(compatProviderKey, s.cfg))
-		return
-	}
 	providerKey := strings.ToLower(strings.TrimSpace(a.Provider))
-	if providerKey == "" {
-		providerKey = "openai-compatibility"
+	if providerKey != "" && providerKey != "codex" {
+		s.coreManager.UnregisterExecutor(providerKey)
 	}
-	s.coreManager.RegisterExecutor(executor.NewOpenAICompatExecutor(providerKey, s.cfg))
 }
 
 func (s *Service) registerResolvedModelsForAuth(a *coreauth.Auth, providerKey string, models []*ModelInfo) {

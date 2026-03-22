@@ -1,13 +1,14 @@
 package nacos
 
 import (
+	"bytes"
 	"crypto/md5"
 	"fmt"
 	"sync"
 
+	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-	"github.com/coachpo/cockpit-backend/internal/config"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
@@ -176,7 +177,9 @@ func (s *NacosConfigStore) getConfig() (string, error) {
 
 func (s *NacosConfigStore) parseConfig(raw string) (*config.Config, string, error) {
 	cfg := &config.Config{Host: "", DisableCooling: false}
-	if err := yaml.Unmarshal([]byte(raw), cfg); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader([]byte(raw)))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(cfg); err != nil {
 		return nil, "", fmt.Errorf("nacos config store: unmarshal config: %w", err)
 	}
 	if err := sanitizeConfig(cfg, true); err != nil {
@@ -224,11 +227,19 @@ func sanitizeConfig(cfg *config.Config, hashRemoteSecret bool) error {
 
 	cfg.SanitizeCodexKeys()
 	cfg.SanitizeCodexHeaderDefaults()
-	cfg.SanitizeOpenAICompatibility()
-	cfg.OAuthExcludedModels = config.NormalizeOAuthExcludedModels(cfg.OAuthExcludedModels)
-	cfg.SanitizeOAuthModelAlias()
-	cfg.SanitizePayloadRules()
+	if err := validateCodexKeys(cfg); err != nil {
+		return err
+	}
 
+	return nil
+}
+
+func validateCodexKeys(cfg *config.Config) error {
+	for i := range cfg.CodexKey {
+		if cfg.CodexKey[i].BaseURL == "" {
+			return fmt.Errorf("nacos config store: codex-api-key[%d].base-url is required", i)
+		}
+	}
 	return nil
 }
 

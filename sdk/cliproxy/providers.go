@@ -3,8 +3,8 @@ package cliproxy
 import (
 	"context"
 
-	"github.com/coachpo/cockpit-backend/internal/watcher"
 	"github.com/coachpo/cockpit-backend/internal/config"
+	"github.com/coachpo/cockpit-backend/internal/watcher"
 )
 
 // NewFileTokenClientProvider returns the default token-backed client loader.
@@ -29,7 +29,7 @@ func NewAPIKeyClientProvider() APIKeyClientProvider {
 type apiKeyClientProvider struct{}
 
 func (p *apiKeyClientProvider) Load(ctx context.Context, cfg *config.Config) (*APIKeyClientResult, error) {
-	codexCount, openAICompat := watcher.BuildAPIKeyClients(cfg)
+	codexCount := watcher.BuildAPIKeyClients(cfg)
 	if ctx != nil {
 		select {
 		case <-ctx.Done():
@@ -38,7 +38,6 @@ func (p *apiKeyClientProvider) Load(ctx context.Context, cfg *config.Config) (*A
 		}
 	}
 	return &APIKeyClientResult{
-		CodexKeyCount:     codexCount,
-		OpenAICompatCount: openAICompat,
+		CodexKeyCount: codexCount,
 	}, nil
 }

@@ -37,16 +37,6 @@ func executorKeyFromAuth(auth *Auth) string {
 	if auth == nil {
 		return ""
 	}
-	if auth.Attributes != nil {
-		providerKey := strings.TrimSpace(auth.Attributes["provider_key"])
-		compatName := strings.TrimSpace(auth.Attributes["compat_name"])
-		if compatName != "" {
-			if providerKey == "" {
-				providerKey = compatName
-			}
-			return strings.ToLower(providerKey)
-		}
-	}
 	return strings.ToLower(strings.TrimSpace(auth.Provider))
 }
 

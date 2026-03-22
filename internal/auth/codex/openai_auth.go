@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
-	"github.com/coachpo/cockpit-backend/internal/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,8 +36,9 @@ type CodexAuth struct {
 // NewCodexAuth creates a new CodexAuth service instance.
 // It initializes an HTTP client with proxy settings from the provided configuration.
 func NewCodexAuth(cfg *config.Config) *CodexAuth {
+	_ = cfg
 	return &CodexAuth{
-		httpClient: util.SetProxy(&cfg.SDKConfig, &http.Client{}),
+		httpClient: &http.Client{},
 	}
 }
 

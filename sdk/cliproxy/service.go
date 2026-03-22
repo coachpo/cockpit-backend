@@ -87,12 +87,6 @@ type Service struct {
 	wsGateway *wsrelay.Manager
 }
 
-// RegisterUsagePlugin registers a usage plugin on the global usage manager.
-// This allows external code to monitor API usage and token consumption.
-//
-// Parameters:
-//   - plugin: The usage plugin to register
-//
 // newDefaultAuthManager creates a default authentication manager with all supported providers.
 func newDefaultAuthManager(store nacos.WatchableAuthStore) *sdkAuth.Manager {
 	return sdkAuth.NewManager(
@@ -138,20 +132,15 @@ func (s *Service) Run(ctx context.Context) error {
 		}
 	}
 
-	tokenResult, err := s.tokenProvider.Load(ctx, s.cfg)
+	// Invoke pluggable providers so embedders can hook custom startup behavior.
+	_, err := s.tokenProvider.Load(ctx, s.cfg)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		return err
-	}
-	if tokenResult == nil {
-		tokenResult = &TokenClientResult{}
 	}
 
-	apiKeyResult, err := s.apiKeyProvider.Load(ctx, s.cfg)
+	_, err = s.apiKeyProvider.Load(ctx, s.cfg)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		return err
-	}
-	if apiKeyResult == nil {
-		apiKeyResult = &APIKeyClientResult{}
 	}
 
 	opts := append(s.serverOptions, api.WithConfigSaver(s.configSource.SaveConfig))
@@ -282,14 +271,13 @@ func (s *Service) Run(ctx context.Context) error {
 
 		s.applyRetryConfig(newCfg)
 		if s.server != nil {
-			s.server.UpdateClients(newCfg)
+			s.server.UpdateConfig(newCfg)
 		}
 		s.cfgMu.Lock()
 		s.cfg = newCfg
 		s.cfgMu.Unlock()
 		if s.coreManager != nil {
 			s.coreManager.SetConfig(newCfg)
-			s.coreManager.SetOAuthModelAlias(newCfg.OAuthModelAlias)
 		}
 		s.rebindExecutors()
 	}
@@ -403,5 +391,3 @@ func (s *Service) ensureAuthDir() error {
 	}
 	return nil
 }
-
-// registerModelsForAuth (re)binds provider models in the global registry using the core auth ID as client identifier.

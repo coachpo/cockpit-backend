@@ -66,7 +66,6 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) []
 		return nil
 	}
 	now := ctx.Now
-	cfg := ctx.Config
 	var metadata map[string]any
 	if errUnmarshal := json.Unmarshal(data, &metadata); errUnmarshal != nil {
 		return nil
@@ -114,9 +113,6 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) []
 		status = coreauth.StatusDisabled
 	}
 
-	// Read per-account excluded models from the OAuth JSON file.
-	perAccountExcluded := extractExcludedModelsFromMetadata(metadata)
-
 	a := &coreauth.Auth{
 		ID:       id,
 		Provider: provider,
@@ -125,8 +121,9 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) []
 		Status:   status,
 		Disabled: disabled,
 		Attributes: map[string]string{
-			"source": fullPath,
-			"path":   fullPath,
+			"source":    fullPath,
+			"path":      fullPath,
+			"auth_kind": "oauth",
 		},
 		ProxyURL:  proxyURL,
 		Metadata:  metadata,
@@ -153,7 +150,6 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) []
 			}
 		}
 	}
-	ApplyAuthExcludedModelsMeta(a, cfg, perAccountExcluded, "oauth")
 	// For codex auth files, extract plan_type from the JWT id_token.
 	if provider == "codex" {
 		if idTokenRaw, ok := metadata["id_token"].(string); ok && strings.TrimSpace(idTokenRaw) != "" {
@@ -165,41 +161,4 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) []
 		}
 	}
 	return []*coreauth.Auth{a}
-}
-
-// extractExcludedModelsFromMetadata reads per-account excluded models from the OAuth JSON metadata.
-// Supports both "excluded_models" and "excluded-models" keys, and accepts both []string and []interface{}.
-func extractExcludedModelsFromMetadata(metadata map[string]any) []string {
-	if metadata == nil {
-		return nil
-	}
-	// Try both key formats
-	raw, ok := metadata["excluded_models"]
-	if !ok {
-		raw, ok = metadata["excluded-models"]
-	}
-	if !ok || raw == nil {
-		return nil
-	}
-	var stringSlice []string
-	switch v := raw.(type) {
-	case []string:
-		stringSlice = v
-	case []interface{}:
-		stringSlice = make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				stringSlice = append(stringSlice, s)
-			}
-		}
-	default:
-		return nil
-	}
-	result := make([]string, 0, len(stringSlice))
-	for _, s := range stringSlice {
-		if trimmed := strings.TrimSpace(s); trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	return result
 }

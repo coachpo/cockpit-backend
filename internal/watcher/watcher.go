@@ -128,7 +128,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 		}
 	}
 
-	w.reloadClients(true, nil, false)
+	w.reloadClients(true, false)
 	return nil
 }
 

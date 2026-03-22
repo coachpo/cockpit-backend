@@ -55,19 +55,14 @@ func SanitizeFunctionName(name string) string {
 }
 
 // SetLogLevel configures the logrus log level based on the configuration.
-// It sets the log level to DebugLevel if debug mode is enabled, otherwise to InfoLevel.
+// Schema-trimmed config always uses InfoLevel.
 func SetLogLevel(cfg *config.Config) {
 	currentLevel := log.GetLevel()
-	var newLevel log.Level
-	if cfg.Debug {
-		newLevel = log.DebugLevel
-	} else {
-		newLevel = log.InfoLevel
-	}
+	newLevel := log.InfoLevel
 
 	if currentLevel != newLevel {
 		log.SetLevel(newLevel)
-		log.Infof("log level changed from %s to %s (debug=%t)", currentLevel, newLevel, cfg.Debug)
+		log.Infof("log level changed from %s to %s", currentLevel, newLevel)
 	}
 }
 

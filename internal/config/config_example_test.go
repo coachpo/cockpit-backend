@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -19,13 +20,40 @@ func TestConfigExampleIncludesCurrentInventory(t *testing.T) {
 		t.Fatalf("unmarshal config.example.yaml: %v", err)
 	}
 
-	assertMapHasKey(t, example, "nonstream-keepalive-interval")
-	assertMapHasKey(t, example, "oauth-excluded-models")
-	assertMapHasKey(t, example, "oauth-model-alias")
+	assertExactMapKeys(t, example, []string{
+		"api-keys",
+		"auth-dir",
+		"codex-api-key",
+		"codex-header-defaults",
+		"disable-cooling",
+		"host",
+		"max-retry-credentials",
+		"max-retry-interval",
+		"nonstream-keepalive-interval",
+		"passthrough-headers",
+		"port",
+		"quota-exceeded",
+		"remote-management",
+		"request-retry",
+		"routing",
+		"streaming",
+		"ws-auth",
+	})
+
+	remoteManagement := assertNestedMap(t, example, "remote-management")
+	assertExactMapKeys(t, remoteManagement, []string{"allow-remote", "secret-key"})
+
+	quotaExceeded := assertNestedMap(t, example, "quota-exceeded")
+	assertExactMapKeys(t, quotaExceeded, []string{"switch-project"})
+
+	routing := assertNestedMap(t, example, "routing")
+	assertExactMapKeys(t, routing, []string{"strategy"})
 
 	streaming := assertNestedMap(t, example, "streaming")
-	assertMapHasKey(t, streaming, "keepalive-seconds")
-	assertMapHasKey(t, streaming, "bootstrap-retries")
+	assertExactMapKeys(t, streaming, []string{"bootstrap-retries", "keepalive-seconds"})
+
+	codexHeaderDefaults := assertNestedMap(t, example, "codex-header-defaults")
+	assertExactMapKeys(t, codexHeaderDefaults, []string{"beta-features", "user-agent"})
 
 	codexEntries := assertNestedList(t, example, "codex-api-key")
 	if len(codexEntries) == 0 {
@@ -35,21 +63,7 @@ func TestConfigExampleIncludesCurrentInventory(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected codex-api-key entry to be a map, got %T", codexEntries[0])
 	}
-	for _, key := range []string{"api-key", "priority", "prefix", "base-url", "websockets", "proxy-url", "models", "headers", "excluded-models"} {
-		assertMapHasKey(t, codexEntry, key)
-	}
-
-	compatEntries := assertNestedList(t, example, "openai-compatibility")
-	if len(compatEntries) == 0 {
-		t.Fatal("expected config example to include an openai-compatibility entry")
-	}
-	compatEntry, ok := compatEntries[0].(map[string]any)
-	if !ok {
-		t.Fatalf("expected openai-compatibility entry to be a map, got %T", compatEntries[0])
-	}
-	for _, key := range []string{"name", "priority", "prefix", "base-url", "api-key-entries", "models", "headers"} {
-		assertMapHasKey(t, compatEntry, key)
-	}
+	assertExactMapKeys(t, codexEntry, []string{"api-key", "base-url", "headers", "priority", "websockets"})
 }
 
 func assertNestedList(t *testing.T, source map[string]any, key string) []any {
@@ -82,5 +96,24 @@ func assertMapHasKey(t *testing.T, source map[string]any, key string) {
 	t.Helper()
 	if _, ok := source[key]; !ok {
 		t.Fatalf("expected key %q in config example", key)
+	}
+}
+
+func assertExactMapKeys(t *testing.T, source map[string]any, want []string) {
+	t.Helper()
+	got := make([]string, 0, len(source))
+	for key := range source {
+		got = append(got, key)
+	}
+	sort.Strings(got)
+	wantCopy := append([]string(nil), want...)
+	sort.Strings(wantCopy)
+	if len(got) != len(wantCopy) {
+		t.Fatalf("config example keys mismatch: got %v want %v", got, wantCopy)
+	}
+	for i := range wantCopy {
+		if got[i] != wantCopy[i] {
+			t.Fatalf("config example keys mismatch: got %v want %v", got, wantCopy)
+		}
 	}
 }

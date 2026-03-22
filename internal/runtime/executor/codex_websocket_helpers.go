@@ -25,7 +25,7 @@ import (
 )
 
 func (e *CodexWebsocketsExecutor) dialCodexWebsocket(ctx context.Context, auth *cliproxyauth.Auth, wsURL string, headers http.Header) (*websocket.Conn, *http.Response, error) {
-	dialer := newProxyAwareWebsocketDialer(e.cfg, auth)
+	dialer := newProxyAwareWebsocketDialer(auth)
 	dialer.HandshakeTimeout = codexResponsesWebsocketHandshakeTO
 	dialer.EnableCompression = true
 	if ctx == nil {
@@ -40,7 +40,7 @@ func (e *CodexWebsocketsExecutor) dialCodexWebsocket(ctx context.Context, auth *
 	return conn, resp, err
 }
 
-func newProxyAwareWebsocketDialer(cfg *config.Config, auth *cliproxyauth.Auth) *websocket.Dialer {
+func newProxyAwareWebsocketDialer(auth *cliproxyauth.Auth) *websocket.Dialer {
 	dialer := &websocket.Dialer{
 		Proxy:             http.ProxyFromEnvironment,
 		HandshakeTimeout:  codexResponsesWebsocketHandshakeTO,
@@ -54,9 +54,6 @@ func newProxyAwareWebsocketDialer(cfg *config.Config, auth *cliproxyauth.Auth) *
 	proxyURL := ""
 	if auth != nil {
 		proxyURL = strings.TrimSpace(auth.ProxyURL)
-	}
-	if proxyURL == "" && cfg != nil {
-		proxyURL = strings.TrimSpace(cfg.ProxyURL)
 	}
 	if proxyURL == "" {
 		return dialer
@@ -131,7 +128,6 @@ func applyCodexPromptCacheHeaders(from sdktranslator.Format, req cliproxyexecuto
 	}
 
 	if cache.ID != "" {
-		rawJSON, _ = sjson.SetBytes(rawJSON, "prompt_cache_key", cache.ID)
 		headers.Set("Conversation_id", cache.ID)
 		headers.Set("Session_id", cache.ID)
 	}
@@ -338,14 +334,12 @@ func parseCodexWebsocketErrorHeaders(payload []byte) http.Header {
 	return mapped
 }
 
-func normalizeCodexWebsocketCompletion(payload []byte) []byte {
-	if strings.TrimSpace(gjson.GetBytes(payload, "type").String()) == "response.done" {
-		updated, err := sjson.SetBytes(payload, "type", "response.completed")
-		if err == nil && len(updated) > 0 {
-			return updated
-		}
+func isCodexCompletionPayload(payload []byte) bool {
+	typeName := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
+	if typeName == "response.completed" || typeName == "response.done" {
+		return true
 	}
-	return payload
+	return strings.TrimSpace(gjson.GetBytes(payload, "object").String()) == "response"
 }
 
 func encodeCodexWebsocketAsSSE(payload []byte) []byte {

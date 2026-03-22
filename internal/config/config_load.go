@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -30,10 +31,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	var cfg Config
 	cfg.Host = ""
 	cfg.DisableCooling = false
-	if err = yaml.Unmarshal(data, &cfg); err != nil {
-		if optional {
-			return &Config{}, nil
-		}
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err = decoder.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 	if cfg.RemoteManagement.SecretKey != "" && !looksLikeBcrypt(cfg.RemoteManagement.SecretKey) {
@@ -47,11 +47,12 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 		cfg.MaxRetryCredentials = 0
 	}
 	cfg.SanitizeCodexKeys()
+	for i := range cfg.CodexKey {
+		if cfg.CodexKey[i].BaseURL == "" {
+			return nil, fmt.Errorf("failed to parse config file: codex-api-key[%d].base-url is required", i)
+		}
+	}
 	cfg.SanitizeCodexHeaderDefaults()
-	cfg.SanitizeOpenAICompatibility()
-	cfg.OAuthExcludedModels = NormalizeOAuthExcludedModels(cfg.OAuthExcludedModels)
-	cfg.SanitizeOAuthModelAlias()
-	cfg.SanitizePayloadRules()
 	return &cfg, nil
 }
 

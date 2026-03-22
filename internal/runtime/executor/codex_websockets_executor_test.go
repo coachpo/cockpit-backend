@@ -6,10 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/coachpo/cockpit-backend/internal/config"
 	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
+	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
 
@@ -193,7 +192,6 @@ func TestNewProxyAwareWebsocketDialerDirectDisablesProxy(t *testing.T) {
 	t.Parallel()
 
 	dialer := newProxyAwareWebsocketDialer(
-		&config.Config{SDKConfig: sdkconfig.SDKConfig{ProxyURL: "http://global-proxy.example.com:8080"}},
 		&cliproxyauth.Auth{ProxyURL: "direct"},
 	)
 

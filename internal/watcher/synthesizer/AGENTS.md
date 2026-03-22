@@ -13,7 +13,7 @@ Runtime auth synthesis layer. This folder turns config-backed and file-backed so
 
 ## LOCAL CONVENTIONS
 - Synthesized auth output must be deterministic and idempotent for the same input snapshot.
-- `Attributes` fields like `source`, model hashes, base URLs, and proxy URLs are downstream contract, not incidental data.
+- `Attributes` fields like `source`, `auth_kind`, base URLs, and proxy URLs are downstream contract, not incidental data.
 - New config-backed auth sources usually need both synthesis logic here and matching diff or update coverage.
 - Keep generated auth compatible with watcher equality and service-side state preservation.
 

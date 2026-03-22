@@ -139,29 +139,27 @@ func (h *Handler) PutCodexKeys(c *gin.Context) {
 		}
 		arr = obj.Items
 	}
-	// Filter out codex entries with empty base-url (treat as removed)
-	filtered := make([]config.CodexKey, 0, len(arr))
+	normalized := make([]config.CodexKey, 0, len(arr))
 	for i := range arr {
 		entry := arr[i]
-		normalizeCodexKey(&entry)
+		config.NormalizeCodexKey(&entry)
 		if entry.BaseURL == "" {
-			continue
+			c.JSON(400, gin.H{"error": "base-url is required"})
+			return
 		}
-		filtered = append(filtered, entry)
+		normalized = append(normalized, entry)
 	}
-	h.cfg.CodexKey = filtered
+	h.cfg.CodexKey = normalized
 	h.cfg.SanitizeCodexKeys()
 	h.persist(c)
 }
 func (h *Handler) PatchCodexKey(c *gin.Context) {
 	type codexKeyPatch struct {
-		APIKey         *string              `json:"api-key"`
-		Prefix         *string              `json:"prefix"`
-		BaseURL        *string              `json:"base-url"`
-		ProxyURL       *string              `json:"proxy-url"`
-		Models         *[]config.CodexModel `json:"models"`
-		Headers        *map[string]string   `json:"headers"`
-		ExcludedModels *[]string            `json:"excluded-models"`
+		APIKey     *string            `json:"api-key"`
+		BaseURL    *string            `json:"base-url"`
+		Priority   *int               `json:"priority"`
+		Websockets *bool              `json:"websockets"`
+		Headers    *map[string]string `json:"headers"`
 	}
 	var body struct {
 		Index *int           `json:"index"`
@@ -177,9 +175,9 @@ func (h *Handler) PatchCodexKey(c *gin.Context) {
 		targetIndex = *body.Index
 	}
 	if targetIndex == -1 && body.Match != nil {
-		match := strings.TrimSpace(*body.Match)
+		match := config.NormalizeCodexAPIKey(*body.Match)
 		for i := range h.cfg.CodexKey {
-			if h.cfg.CodexKey[i].APIKey == match {
+			if config.NormalizeCodexAPIKey(h.cfg.CodexKey[i].APIKey) == match {
 				targetIndex = i
 				break
 			}
@@ -191,45 +189,37 @@ func (h *Handler) PatchCodexKey(c *gin.Context) {
 	}
 
 	entry := h.cfg.CodexKey[targetIndex]
+	config.NormalizeCodexKey(&entry)
 	if body.Value.APIKey != nil {
-		entry.APIKey = strings.TrimSpace(*body.Value.APIKey)
-	}
-	if body.Value.Prefix != nil {
-		entry.Prefix = strings.TrimSpace(*body.Value.Prefix)
+		entry.APIKey = *body.Value.APIKey
 	}
 	if body.Value.BaseURL != nil {
-		trimmed := strings.TrimSpace(*body.Value.BaseURL)
-		if trimmed == "" {
-			h.cfg.CodexKey = append(h.cfg.CodexKey[:targetIndex], h.cfg.CodexKey[targetIndex+1:]...)
-			h.cfg.SanitizeCodexKeys()
-			h.persist(c)
+		if strings.TrimSpace(*body.Value.BaseURL) == "" {
+			c.JSON(400, gin.H{"error": "base-url is required"})
 			return
 		}
-		entry.BaseURL = trimmed
+		entry.BaseURL = *body.Value.BaseURL
 	}
-	if body.Value.ProxyURL != nil {
-		entry.ProxyURL = strings.TrimSpace(*body.Value.ProxyURL)
+	if body.Value.Priority != nil {
+		entry.Priority = *body.Value.Priority
 	}
-	if body.Value.Models != nil {
-		entry.Models = append([]config.CodexModel(nil), (*body.Value.Models)...)
+	if body.Value.Websockets != nil {
+		entry.Websockets = *body.Value.Websockets
 	}
 	if body.Value.Headers != nil {
-		entry.Headers = config.NormalizeHeaders(*body.Value.Headers)
+		entry.Headers = *body.Value.Headers
 	}
-	if body.Value.ExcludedModels != nil {
-		entry.ExcludedModels = config.NormalizeExcludedModels(*body.Value.ExcludedModels)
-	}
-	normalizeCodexKey(&entry)
+	config.NormalizeCodexKey(&entry)
 	h.cfg.CodexKey[targetIndex] = entry
 	h.cfg.SanitizeCodexKeys()
 	h.persist(c)
 }
 
 func (h *Handler) DeleteCodexKey(c *gin.Context) {
-	if val := c.Query("api-key"); val != "" {
+	if val := config.NormalizeCodexAPIKey(c.Query("api-key")); val != "" {
 		out := make([]config.CodexKey, 0, len(h.cfg.CodexKey))
 		for _, v := range h.cfg.CodexKey {
-			if v.APIKey != val {
+			if config.NormalizeCodexAPIKey(v.APIKey) != val {
 				out = append(out, v)
 			}
 		}
@@ -249,30 +239,4 @@ func (h *Handler) DeleteCodexKey(c *gin.Context) {
 		}
 	}
 	c.JSON(400, gin.H{"error": "missing api-key or index"})
-}
-
-func normalizeCodexKey(entry *config.CodexKey) {
-	if entry == nil {
-		return
-	}
-	entry.APIKey = strings.TrimSpace(entry.APIKey)
-	entry.Prefix = strings.TrimSpace(entry.Prefix)
-	entry.BaseURL = strings.TrimSpace(entry.BaseURL)
-	entry.ProxyURL = strings.TrimSpace(entry.ProxyURL)
-	entry.Headers = config.NormalizeHeaders(entry.Headers)
-	entry.ExcludedModels = config.NormalizeExcludedModels(entry.ExcludedModels)
-	if len(entry.Models) == 0 {
-		return
-	}
-	normalized := make([]config.CodexModel, 0, len(entry.Models))
-	for i := range entry.Models {
-		model := entry.Models[i]
-		model.Name = strings.TrimSpace(model.Name)
-		model.Alias = strings.TrimSpace(model.Alias)
-		if model.Name == "" && model.Alias == "" {
-			continue
-		}
-		normalized = append(normalized, model)
-	}
-	entry.Models = normalized
 }

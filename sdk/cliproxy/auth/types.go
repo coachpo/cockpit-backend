@@ -47,9 +47,9 @@ type Auth struct {
 	ID string `json:"id"`
 	// Index is a stable runtime identifier derived from auth metadata (not persisted).
 	Index string `json:"-"`
-	// Provider is the upstream provider key (e.g. "codex", "openai").
+	// Provider is the upstream provider key (for example, "codex").
 	Provider string `json:"provider"`
-	// Prefix optionally namespaces models for routing (e.g., "teamA/gpt-5-codex").
+	// Prefix optionally namespaces models for routing metadata on an auth record.
 	Prefix string `json:"prefix,omitempty"`
 	// FileName stores the relative or absolute path of the backing auth file.
 	FileName string `json:"-"`
@@ -65,7 +65,7 @@ type Auth struct {
 	Disabled bool `json:"disabled"`
 	// Unavailable flags transient provider unavailability (e.g. quota exceeded).
 	Unavailable bool `json:"unavailable"`
-	// ProxyURL overrides the global proxy setting for this auth if provided.
+	// ProxyURL overrides outbound proxy behavior for this auth if provided.
 	ProxyURL string `json:"proxy_url,omitempty"`
 	// Attributes stores provider specific metadata needed by executors (immutable configuration).
 	Attributes map[string]string `json:"attributes,omitempty"`
@@ -171,27 +171,19 @@ func (a *Auth) indexSeed() string {
 	}
 
 	providerKey := strings.ToLower(strings.TrimSpace(a.Provider))
-	compatName := ""
 	baseURL := ""
 	apiKey := ""
 	source := ""
 	if a.Attributes != nil {
-		if value := strings.TrimSpace(a.Attributes["provider_key"]); value != "" {
-			providerKey = strings.ToLower(value)
-		}
-		compatName = strings.ToLower(strings.TrimSpace(a.Attributes["compat_name"]))
 		baseURL = strings.TrimSpace(a.Attributes["base_url"])
 		apiKey = strings.TrimSpace(a.Attributes["api_key"])
 		source = strings.TrimSpace(a.Attributes["source"])
 	}
 
 	proxyURL := strings.TrimSpace(a.ProxyURL)
-	hasCredentialIdentity := compatName != "" || baseURL != "" || proxyURL != "" || apiKey != "" || source != ""
+	hasCredentialIdentity := baseURL != "" || proxyURL != "" || apiKey != "" || source != ""
 	if providerKey != "" && hasCredentialIdentity {
 		parts := []string{"provider=" + providerKey}
-		if compatName != "" {
-			parts = append(parts, "compat="+compatName)
-		}
 		if baseURL != "" {
 			parts = append(parts, "base="+baseURL)
 		}
@@ -285,7 +277,7 @@ func (a *Auth) DisableCoolingOverride() (bool, bool) {
 }
 
 // ToolPrefixDisabled returns whether the proxy_ tool name prefix should be
-// skipped for this auth. When true, tool names are sent to Anthropic unchanged.
+// skipped for this auth. When true, tool names are forwarded unchanged.
 // The value is read from metadata key "tool_prefix_disabled" (or "tool-prefix-disabled").
 func (a *Auth) ToolPrefixDisabled() bool {
 	if a == nil || a.Metadata == nil {

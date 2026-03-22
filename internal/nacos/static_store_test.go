@@ -51,6 +51,19 @@ func TestStaticConfigSourceSaveConfigWritesFile(t *testing.T) {
 	}
 }
 
+func TestStaticConfigSourceSaveConfigRejectsCodexKeyWithoutBaseURL(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	source := NewStaticConfigSource(configPath)
+
+	err := source.SaveConfig(&config.Config{CodexKey: []config.CodexKey{{APIKey: "test", BaseURL: "   "}}})
+	if err == nil {
+		t.Fatal("expected SaveConfig to reject codex key without base-url")
+	}
+	if !strings.Contains(err.Error(), "codex-api-key[0].base-url is required") {
+		t.Fatalf("expected base-url validation error, got %v", err)
+	}
+}
+
 func TestStaticAuthStoreSaveAndDeleteWritesLocalFiles(t *testing.T) {
 	authDir := t.TempDir()
 	store := NewStaticAuthStore(authDir)

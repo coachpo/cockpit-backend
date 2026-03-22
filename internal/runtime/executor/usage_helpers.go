@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -100,7 +99,11 @@ func resolveUsageSource(auth *cliproxyauth.Auth, ctxAPIKey string) string {
 }
 
 func parseCodexUsage(data []byte) (usageDetail, bool) {
-	usageNode := gjson.ParseBytes(data).Get("response.usage")
+	root := gjson.ParseBytes(data)
+	usageNode := root.Get("response.usage")
+	if !usageNode.Exists() {
+		usageNode = root.Get("usage")
+	}
 	if !usageNode.Exists() {
 		return usageDetail{}, false
 	}
@@ -151,47 +154,4 @@ func parseOpenAIUsage(data []byte) usageDetail {
 		detail.ReasoningTokens = reasoning.Int()
 	}
 	return detail
-}
-
-func parseOpenAIStreamUsage(line []byte) (usageDetail, bool) {
-	payload := jsonPayload(line)
-	if len(payload) == 0 || !gjson.ValidBytes(payload) {
-		return usageDetail{}, false
-	}
-	usageNode := gjson.GetBytes(payload, "usage")
-	if !usageNode.Exists() {
-		return usageDetail{}, false
-	}
-	detail := usageDetail{
-		InputTokens:  usageNode.Get("prompt_tokens").Int(),
-		OutputTokens: usageNode.Get("completion_tokens").Int(),
-		TotalTokens:  usageNode.Get("total_tokens").Int(),
-	}
-	if cached := usageNode.Get("prompt_tokens_details.cached_tokens"); cached.Exists() {
-		detail.CachedTokens = cached.Int()
-	}
-	if reasoning := usageNode.Get("completion_tokens_details.reasoning_tokens"); reasoning.Exists() {
-		detail.ReasoningTokens = reasoning.Int()
-	}
-	return detail, true
-}
-
-func jsonPayload(line []byte) []byte {
-	trimmed := bytes.TrimSpace(line)
-	if len(trimmed) == 0 {
-		return nil
-	}
-	if bytes.Equal(trimmed, []byte("[DONE]")) {
-		return nil
-	}
-	if bytes.HasPrefix(trimmed, []byte("event:")) {
-		return nil
-	}
-	if bytes.HasPrefix(trimmed, []byte("data:")) {
-		trimmed = bytes.TrimSpace(trimmed[len("data:"):])
-	}
-	if len(trimmed) == 0 || trimmed[0] != '{' {
-		return nil
-	}
-	return trimmed
 }
