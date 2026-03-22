@@ -1,3 +1,5 @@
+# Full inventory of supported config keys.
+# For a runnable local config, start from config.starter.yaml instead.
 api-keys: []
 passthrough-headers: false
 streaming:
@@ -8,8 +10,9 @@ host: ""
 port: 8317
 remote-management:
   allow-remote: false
-  secret-key: $2a$10$bEl6zYq2iU9Oc.ldhEfSW.J/ldu4zyBIWjEnXB1Awf/lSCsfjxVme
-auth-dir: /home/qing/.cockpit
+  # Plaintext values are hashed automatically when the config is loaded or saved.
+  secret-key: "change-me-to-a-strong-password"
+auth-dir: "~/.cockpit"
 disable-cooling: false
 request-retry: 3
 max-retry-credentials: 0
@@ -20,12 +23,11 @@ routing:
   strategy: round-robin
 ws-auth: false
 codex-api-key:
-  - api-key: sk-codex-example
+  - api-key: "sk-codex-replace-me"
     priority: 100
     base-url: https://api.openai.com/v1
     websockets: true
-    headers:
-      openai-organization: org-example
+    headers: {}
 codex-header-defaults:
   user-agent: ""
   beta-features: ""
