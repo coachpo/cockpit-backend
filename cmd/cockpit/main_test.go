@@ -7,6 +7,7 @@ import (
 	"flag"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -82,6 +83,37 @@ func TestMainExitsNonZeroWhenBootstrapFails(t *testing.T) {
 	}
 }
 
+func TestMainUsesCockpitSubdirForDefaultConfigPath(t *testing.T) {
+	if os.Getenv("COCKPIT_MAIN_DEFAULT_CONFIG_HELPER") == "1" {
+		workingDir := os.Getenv("COCKPIT_MAIN_WORKDIR")
+		if err := os.Chdir(workingDir); err != nil {
+			t.Fatalf("chdir temp dir: %v", err)
+		}
+		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+		os.Args = []string{os.Args[0]}
+		main()
+		return
+	}
+
+	tempDir := t.TempDir()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestMainUsesCockpitSubdirForDefaultConfigPath$")
+	cmd.Env = append(os.Environ(),
+		"COCKPIT_MAIN_DEFAULT_CONFIG_HELPER=1",
+		"COCKPIT_MAIN_WORKDIR="+tempDir,
+		"NACOS_ADDR=",
+		"DEPLOY=",
+	)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected child process to exit non-zero, output=%q", string(output))
+	}
+
+	expectedPath := filepath.Join(tempDir, "cockpit", "config.yaml")
+	if !strings.Contains(string(output), expectedPath) {
+		t.Fatalf("expected bootstrap failure to mention default cockpit config path %q, got %q", expectedPath, string(output))
+	}
+}
+
 func TestNewCommandFlagSet_ExposesOnlyConfigFlag(t *testing.T) {
 	fs := newCommandFlagSet("cockpit")
 	if fs.Lookup("config") == nil {
@@ -105,6 +137,12 @@ func TestNewCommandFlagSet_ParsesConfigOverride(t *testing.T) {
 		t.Fatal("expected -config flag lookup after parse")
 	} else if got.Value.String() != "/tmp/custom-config.yaml" {
 		t.Fatalf("expected config flag value to be propagated, got %q", got.Value.String())
+	}
+}
+
+func TestConfigPathUsageMentionsCockpitSubdir(t *testing.T) {
+	if !strings.Contains(configPathUsage, "./cockpit/config.yaml") {
+		t.Fatalf("expected configPathUsage to mention ./cockpit/config.yaml, got %q", configPathUsage)
 	}
 }
 
@@ -154,39 +192,32 @@ func TestResolveBootstrapConfig_UsesNacosBeforeStatic(t *testing.T) {
 	}
 }
 
-func TestResolveBootstrapConfig_FallsBackToStaticWhenNacosFails(t *testing.T) {
-	result, err := resolveBootstrapConfig("/tmp/config.yaml", bootstrapLoaders{
+func TestResolveBootstrapConfig_FailsFastWhenNacosFails(t *testing.T) {
+	staticCalls := 0
+
+	_, err := resolveBootstrapConfig("/tmp/config.yaml", bootstrapLoaders{
 		nacosAddr: "127.0.0.1:8848",
 		loadNacos: func() (*bootstrapConfig, error) {
 			return nil, errors.New("nacos unavailable")
 		},
-		loadStatic: func(path string) (*bootstrapConfig, error) {
-			if path != "/tmp/config.yaml" {
-				t.Fatalf("expected static config path to be forwarded, got %q", path)
-			}
-			return &bootstrapConfig{
-				cfg:          &config.Config{Port: 9090},
-				configSource: modeTestConfigSource{mode: "static"},
-			}, nil
+		loadStatic: func(string) (*bootstrapConfig, error) {
+			staticCalls++
+			return &bootstrapConfig{cfg: &config.Config{Port: 9090}, configSource: modeTestConfigSource{mode: "static"}}, nil
 		},
 	})
-	if err != nil {
-		t.Fatalf("resolveBootstrapConfig() error = %v", err)
+	if err == nil {
+		t.Fatal("expected error when nacos bootstrap fails")
 	}
-	if result == nil {
-		t.Fatal("resolveBootstrapConfig() returned nil result")
+	if !strings.Contains(err.Error(), "failed to bootstrap from nacos") || !strings.Contains(err.Error(), "nacos unavailable") {
+		t.Fatalf("expected nacos bootstrap error, got %q", err)
 	}
-	if result.configSource.Mode() != "static" {
-		t.Fatalf("expected static config source after nacos failure, got %q", result.configSource.Mode())
-	}
-	if result.authStore != nil {
-		t.Fatal("expected static fallback to defer auth store construction")
+	if staticCalls != 0 {
+		t.Fatalf("expected static config not to be loaded after nacos failure, got %d call(s)", staticCalls)
 	}
 }
 
-func TestResolveBootstrapConfig_ReturnsErrorWhenAllSourcesFail(t *testing.T) {
+func TestResolveBootstrapConfig_ReturnsStaticErrorWhenNacosIsUnconfigured(t *testing.T) {
 	_, err := resolveBootstrapConfig("/tmp/config.yaml", bootstrapLoaders{
-		nacosAddr: "127.0.0.1:8848",
 		loadNacos: func() (*bootstrapConfig, error) {
 			return nil, errors.New("nacos unavailable")
 		},
@@ -195,10 +226,10 @@ func TestResolveBootstrapConfig_ReturnsErrorWhenAllSourcesFail(t *testing.T) {
 		},
 	})
 	if err == nil {
-		t.Fatal("expected error when both nacos and static config fail")
+		t.Fatal("expected error when local static config fails")
 	}
-	if !strings.Contains(err.Error(), "nacos") || !strings.Contains(err.Error(), "config file missing") {
-		t.Fatalf("expected combined bootstrap error, got %q", err)
+	if !strings.Contains(err.Error(), "local static config") || !strings.Contains(err.Error(), "config file missing") {
+		t.Fatalf("expected local static bootstrap error, got %q", err)
 	}
 }
 

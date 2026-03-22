@@ -24,7 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const configPathUsage = "Path to the YAML config file (defaults to ./config.yaml)"
+const configPathUsage = "Path to the YAML config file (defaults to ./cockpit/config.yaml)"
 
 // init initializes the shared logger setup.
 func init() {
@@ -108,23 +108,12 @@ func resolveBootstrapConfig(configFilePath string, loaders bootstrapLoaders) (*b
 
 	nacosAddr := strings.TrimSpace(loaders.nacosAddr)
 	if nacosAddr != "" {
-		loaded, nacosErr := loaders.loadNacos()
-		if nacosErr == nil {
-			if err := validateBootstrapConfig("nacos", loaded); err == nil {
-				return loaded, nil
-			} else {
-				nacosErr = err
-			}
+		loaded, err := loaders.loadNacos()
+		if err != nil {
+			return nil, fmt.Errorf("failed to bootstrap from nacos: %w", err)
 		}
-
-		log.WithError(nacosErr).Info("failed to bootstrap from nacos; falling back to local static config")
-
-		loaded, staticErr := loaders.loadStatic(configFilePath)
-		if staticErr != nil {
-			return nil, fmt.Errorf("failed to bootstrap from nacos (%w) and local static config (%w)", nacosErr, staticErr)
-		}
-		if err := validateBootstrapConfig("static", loaded); err != nil {
-			return nil, fmt.Errorf("failed to bootstrap from nacos (%w) and local static config (%w)", nacosErr, err)
+		if err := validateBootstrapConfig("nacos", loaded); err != nil {
+			return nil, fmt.Errorf("failed to bootstrap from nacos: %w", err)
 		}
 		return loaded, nil
 	}
@@ -218,7 +207,7 @@ func main() {
 
 	// Determine and load the configuration file.
 	if configFilePath == "" {
-		configFilePath = filepath.Join(wd, "config.yaml")
+		configFilePath = filepath.Join(wd, "cockpit", "config.yaml")
 	}
 
 	loaded, err := resolveBootstrapConfig(configFilePath, bootstrapLoaders{nacosAddr: os.Getenv("NACOS_ADDR")})
@@ -241,7 +230,11 @@ func main() {
 	// Set the log level based on the configuration.
 	util.SetLogLevel(cfg)
 
-	if resolvedAuthDir, errResolveAuthDir := util.ResolveAuthDir(cfg.AuthDir); errResolveAuthDir != nil {
+	configMode := ""
+	if configSource != nil {
+		configMode = configSource.Mode()
+	}
+	if resolvedAuthDir, errResolveAuthDir := util.ResolveRuntimeAuthDir(cfg.AuthDir, configMode); errResolveAuthDir != nil {
 		log.Errorf("failed to resolve auth directory: %v", errResolveAuthDir)
 		return
 	} else {

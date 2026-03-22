@@ -33,6 +33,18 @@ func TestBuildAPIKeyClientsCounts(t *testing.T) {
 	}
 }
 
+type watcherModeConfigSource struct {
+	mode string
+}
+
+func (s watcherModeConfigSource) LoadConfig() (*config.Config, error) { return &config.Config{}, nil }
+func (s watcherModeConfigSource) SaveConfig(*config.Config) error     { return nil }
+func (s watcherModeConfigSource) WatchConfig(func(*config.Config)) error {
+	return nil
+}
+func (s watcherModeConfigSource) StopWatch()   {}
+func (s watcherModeConfigSource) Mode() string { return s.mode }
+
 func TestNormalizeAuthStripsTemporalFields(t *testing.T) {
 	now := time.Now()
 	auth := &coreauth.Auth{
@@ -174,6 +186,33 @@ func TestReloadConfigIfChanged_TriggersOnChangeAndSkipsUnchanged(t *testing.T) {
 	defer w.clientsMutex.RUnlock()
 	if w.config == nil || w.config.Port != 9090 || !w.config.RemoteManagement.AllowRemote {
 		t.Fatalf("expected config to be updated after reload, got %+v", w.config)
+	}
+}
+
+func TestReloadConfigFromSourceNormalizesNacosAuthDirBeforeDiffing(t *testing.T) {
+	wantAuthDir := ""
+	reloads := 0
+	w := &Watcher{
+		authDir:        wantAuthDir,
+		configSource:   watcherModeConfigSource{mode: "nacos"},
+		lastAuthHashes: make(map[string]string),
+		reloadCallback: func(*config.Config) { reloads++ },
+	}
+	w.SetConfig(&config.Config{AuthDir: wantAuthDir, Port: 8080})
+
+	w.reloadConfigFromSource(&config.Config{AuthDir: "/home/qing/projects/cockpit/.sisyphus/local-start/auth", Port: 8080})
+
+	if reloads != 0 {
+		t.Fatalf("expected no reload callback when nacos auth dir normalizes to empty runtime path, got %d", reloads)
+	}
+
+	w.clientsMutex.RLock()
+	defer w.clientsMutex.RUnlock()
+	if w.config == nil {
+		t.Fatal("expected watcher config to remain set")
+	}
+	if got := w.config.AuthDir; got != wantAuthDir {
+		t.Fatalf("expected watcher auth dir %q, got %q", wantAuthDir, got)
 	}
 }
 

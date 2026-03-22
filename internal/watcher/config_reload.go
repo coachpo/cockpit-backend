@@ -80,6 +80,15 @@ func (w *Watcher) reloadConfigFromSource(newConfig *config.Config) {
 	if newConfig == nil {
 		return
 	}
+	mode := ""
+	if w.configSource != nil {
+		mode = w.configSource.Mode()
+	}
+	if resolvedAuthDir, errResolveAuthDir := util.ResolveRuntimeAuthDir(newConfig.AuthDir, mode); errResolveAuthDir != nil {
+		log.Errorf("failed to resolve auth directory from source config: %v", errResolveAuthDir)
+	} else {
+		newConfig.AuthDir = resolvedAuthDir
+	}
 	log.Debug("=========================== CONFIG RELOAD (from source) ============================")
 
 	var oldConfig *config.Config
@@ -146,7 +155,11 @@ func (w *Watcher) reloadConfig() bool {
 		return false
 	}
 
-	if resolvedAuthDir, errResolveAuthDir := util.ResolveAuthDir(newConfig.AuthDir); errResolveAuthDir != nil {
+	mode := ""
+	if w.configSource != nil {
+		mode = w.configSource.Mode()
+	}
+	if resolvedAuthDir, errResolveAuthDir := util.ResolveRuntimeAuthDir(newConfig.AuthDir, mode); errResolveAuthDir != nil {
 		log.Errorf("failed to resolve auth directory from config: %v", errResolveAuthDir)
 	} else {
 		newConfig.AuthDir = resolvedAuthDir

@@ -88,6 +88,15 @@ func ResolveAuthDir(authDir string) (string, error) {
 	return filepath.Clean(authDir), nil
 }
 
+// ResolveRuntimeAuthDir returns the effective auth directory for the current runtime.
+func ResolveRuntimeAuthDir(authDir string, sourceMode string) (string, error) {
+	if strings.EqualFold(strings.TrimSpace(sourceMode), "nacos") {
+		return "", nil
+	}
+
+	return ResolveAuthDir(authDir)
+}
+
 // CountAuthFiles returns the number of auth records available through the provided Store.
 // For filesystem-backed stores, this reflects the number of JSON auth files under the configured directory.
 func CountAuthFiles[T any](ctx context.Context, store interface {

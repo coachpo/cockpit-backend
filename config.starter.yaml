@@ -1,5 +1,5 @@
 # Runnable local static-mode config.
-# Copy this to ./config.yaml and replace the placeholder secrets before you start the server.
+# Copy this to ./cockpit/config.yaml and replace the placeholder secrets before you start the server.
 
 host: "127.0.0.1"
 port: 8317
@@ -9,8 +9,8 @@ remote-management:
   # Plaintext values are hashed automatically when the config is loaded or saved.
   secret-key: "change-me-to-a-strong-password"
 
-# Static auth JSON files live here if you add OAuth/file-backed auth later.
-auth-dir: "~/.cockpit"
+# In local static mode, auth JSON files live here if you add OAuth/file-backed auth later.
+auth-dir: "./cockpit"
 
 # Optional inbound API keys for callers of this proxy. Leave empty for local-only use.
 api-keys: []

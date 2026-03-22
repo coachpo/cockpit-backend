@@ -16,6 +16,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	"github.com/coachpo/cockpit-backend/internal/registry"
+	"github.com/coachpo/cockpit-backend/internal/util"
 	"github.com/coachpo/cockpit-backend/internal/watcher"
 	"github.com/coachpo/cockpit-backend/internal/wsrelay"
 	sdkaccess "github.com/coachpo/cockpit-backend/sdk/access"
@@ -95,6 +96,27 @@ func newDefaultAuthManager(store nacos.WatchableAuthStore) *sdkAuth.Manager {
 	)
 }
 
+func (s *Service) applyRuntimeAuthDir() error {
+	if s == nil || s.cfg == nil {
+		return nil
+	}
+
+	mode := ""
+	if s.configSource != nil {
+		mode = s.configSource.Mode()
+	}
+
+	resolvedAuthDir, err := util.ResolveRuntimeAuthDir(s.cfg.AuthDir, mode)
+	if err != nil {
+		return fmt.Errorf("cockpit: failed to resolve auth directory: %w", err)
+	}
+
+	s.cfgMu.Lock()
+	s.cfg.AuthDir = resolvedAuthDir
+	s.cfgMu.Unlock()
+	return nil
+}
+
 // Run starts the service and blocks until the context is cancelled or the server stops.
 // It initializes all components including authentication, file watching, HTTP server,
 // and starts processing requests. The method blocks until the context is cancelled.
@@ -119,6 +141,10 @@ func (s *Service) Run(ctx context.Context) error {
 			log.Errorf("service shutdown returned error: %v", err)
 		}
 	}()
+
+	if err := s.applyRuntimeAuthDir(); err != nil {
+		return err
+	}
 
 	if err := s.ensureAuthDir(); err != nil {
 		return err
@@ -375,6 +401,10 @@ func (s *Service) Shutdown(ctx context.Context) error {
 }
 
 func (s *Service) ensureAuthDir() error {
+	if s == nil || s.cfg == nil || strings.TrimSpace(s.cfg.AuthDir) == "" {
+		return nil
+	}
+
 	info, err := os.Stat(s.cfg.AuthDir)
 	if err != nil {
 		if os.IsNotExist(err) {
