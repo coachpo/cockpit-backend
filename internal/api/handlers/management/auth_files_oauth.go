@@ -126,6 +126,88 @@ func (h *Handler) managementCallbackURL(path string) (string, error) {
 	return fmt.Sprintf("http://127.0.0.1:%d%s", h.cfg.Port, path), nil
 }
 
+func buildCodexOAuthRecord(bundle *codex.CodexAuthBundle) *coreauth.Auth {
+	if bundle == nil {
+		return nil
+	}
+
+	tokenData := bundle.TokenData
+	claims, _ := codex.ParseJWTToken(tokenData.IDToken)
+
+	email := strings.TrimSpace(tokenData.Email)
+	if email == "" && claims != nil {
+		email = strings.TrimSpace(claims.Email)
+	}
+	accountID := strings.TrimSpace(tokenData.AccountID)
+	if accountID == "" && claims != nil {
+		accountID = strings.TrimSpace(claims.GetAccountID())
+	}
+
+	planType := ""
+	hashAccountID := ""
+	if claims != nil {
+		planType = strings.TrimSpace(claims.CodexAuthInfo.ChatgptPlanType)
+		if accountID != "" {
+			digest := sha256.Sum256([]byte(accountID))
+			hashAccountID = hex.EncodeToString(digest[:])[:8]
+		}
+	}
+
+	storage := &codex.CodexTokenStorage{
+		IDToken:      tokenData.IDToken,
+		AccessToken:  tokenData.AccessToken,
+		RefreshToken: tokenData.RefreshToken,
+		AccountID:    accountID,
+		LastRefresh:  bundle.LastRefresh,
+		Email:        email,
+		Expire:       tokenData.Expire,
+	}
+
+	metadata := map[string]any{}
+	if email != "" {
+		metadata["email"] = email
+	}
+	if accountID != "" {
+		metadata["account_id"] = accountID
+	}
+	if v := strings.TrimSpace(tokenData.IDToken); v != "" {
+		metadata["id_token"] = v
+	}
+	if v := strings.TrimSpace(tokenData.AccessToken); v != "" {
+		metadata["access_token"] = v
+	}
+	if v := strings.TrimSpace(tokenData.RefreshToken); v != "" {
+		metadata["refresh_token"] = v
+	}
+	if v := strings.TrimSpace(bundle.LastRefresh); v != "" {
+		metadata["last_refresh"] = v
+	}
+	if v := strings.TrimSpace(tokenData.Expire); v != "" {
+		metadata["expired"] = v
+	}
+	if planType != "" {
+		metadata["plan_type"] = planType
+	}
+	storage.SetMetadata(metadata)
+
+	attributes := map[string]string{managedStoreAttribute: "true"}
+	if planType != "" {
+		attributes["plan_type"] = planType
+	}
+
+	fileName := codex.CredentialFileName(email, planType, hashAccountID, true)
+	return &coreauth.Auth{
+		ID:         fileName,
+		Provider:   "codex",
+		FileName:   fileName,
+		Label:      email,
+		Status:     coreauth.StatusActive,
+		Storage:    storage,
+		Metadata:   metadata,
+		Attributes: attributes,
+	}
+}
+
 func (h *Handler) saveTokenRecord(ctx context.Context, record *coreauth.Auth) (string, error) {
 	if record == nil {
 		return "", fmt.Errorf("token record is nil")
@@ -232,19 +314,7 @@ func (h *Handler) completeCodexOAuthFlow(ctx context.Context, state string, pkce
 		log.Errorf("Failed to exchange authorization code for tokens: %v", authErr)
 		return
 	}
-	claims, _ := codex.ParseJWTToken(bundle.TokenData.IDToken)
-	planType := ""
-	hashAccountID := ""
-	if claims != nil {
-		planType = strings.TrimSpace(claims.CodexAuthInfo.ChatgptPlanType)
-		if accountID := claims.GetAccountID(); accountID != "" {
-			digest := sha256.Sum256([]byte(accountID))
-			hashAccountID = hex.EncodeToString(digest[:])[:8]
-		}
-	}
-	tokenStorage := openaiAuth.CreateTokenStorage(bundle)
-	fileName := codex.CredentialFileName(tokenStorage.Email, planType, hashAccountID, true)
-	record := &coreauth.Auth{ID: fileName, Provider: "codex", FileName: fileName, Storage: tokenStorage, Metadata: map[string]any{"email": tokenStorage.Email, "account_id": tokenStorage.AccountID}, Attributes: map[string]string{managedStoreAttribute: "true"}}
+	record := buildCodexOAuthRecord(bundle)
 	savedPath, errSave := h.saveTokenRecord(ctx, record)
 	if errSave != nil {
 		SetOAuthSessionError(state, "Failed to save authentication tokens")
