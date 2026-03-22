@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/coachpo/cockpit-backend/internal/interfaces"
+	"github.com/gin-gonic/gin"
 )
 
 type ErrorResponse struct {

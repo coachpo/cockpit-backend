@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/coachpo/cockpit-backend/internal/registry"
 	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	"github.com/google/uuid"
 )
 
 func TestManager_ShouldRetryAfterError_RespectsAuthRequestRetryOverride(t *testing.T) {

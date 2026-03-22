@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/coachpo/cockpit-backend/internal/util"
+	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
 

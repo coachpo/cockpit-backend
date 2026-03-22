@@ -3,9 +3,9 @@ package handlers
 import (
 	"strings"
 
+	coreexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	coreexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
 	"golang.org/x/net/context"
 )
 

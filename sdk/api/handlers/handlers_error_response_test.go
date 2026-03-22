@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/coachpo/cockpit-backend/internal/interfaces"
 	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
+	"github.com/coachpo/cockpit-backend/internal/interfaces"
+	"github.com/gin-gonic/gin"
 )
 
 func TestWriteErrorResponse_AddonHeadersDisabledByDefault(t *testing.T) {

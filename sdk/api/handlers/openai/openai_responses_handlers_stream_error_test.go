@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gin-gonic/gin"
+	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/interfaces"
 	"github.com/coachpo/cockpit-backend/sdk/api/handlers"
-	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
+	"github.com/gin-gonic/gin"
 )
 
 func TestForwardResponsesStreamTerminalErrorUsesResponsesErrorChunk(t *testing.T) {

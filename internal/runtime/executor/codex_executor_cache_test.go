@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
 	sdktranslator "github.com/coachpo/cockpit-backend/sdk/translator"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 )
 

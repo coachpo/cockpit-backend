@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gin-gonic/gin"
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/util"
+	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
 

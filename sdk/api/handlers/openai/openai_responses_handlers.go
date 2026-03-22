@@ -12,11 +12,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	. "github.com/coachpo/cockpit-backend/internal/constant"
 	"github.com/coachpo/cockpit-backend/internal/interfaces"
 	"github.com/coachpo/cockpit-backend/internal/registry"
 	"github.com/coachpo/cockpit-backend/sdk/api/handlers"
+	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )

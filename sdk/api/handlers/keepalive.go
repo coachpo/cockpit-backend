@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/coachpo/cockpit-backend/internal/config"
+	"github.com/gin-gonic/gin"
 	"golang.org/x/net/context"
 )
 

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/registry"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
 )
 
 func TestGetRequestDetails_PreservesSuffix(t *testing.T) {

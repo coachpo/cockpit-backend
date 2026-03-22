@@ -5,10 +5,10 @@
 package api
 
 import (
-	"github.com/gin-gonic/gin"
 	internalmanagement "github.com/coachpo/cockpit-backend/internal/api/handlers/management"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/coachpo/cockpit-backend/internal/config"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	"github.com/gin-gonic/gin"
 )
 
 // ManagementTokenRequester exposes a limited subset of management endpoints for requesting tokens.

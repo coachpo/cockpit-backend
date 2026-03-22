@@ -11,14 +11,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
+	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/interfaces"
 	"github.com/coachpo/cockpit-backend/internal/registry"
 	"github.com/coachpo/cockpit-backend/sdk/api/handlers"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	coreexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
-	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/tidwall/gjson"
 )
 
