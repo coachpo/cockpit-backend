@@ -154,6 +154,14 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, metadataByName map[str
 	if name == "" {
 		name = auth.ID
 	}
+	status := strings.TrimSpace(string(auth.Status))
+	if status == "" {
+		if auth.Disabled {
+			status = string(coreauth.StatusDisabled)
+		} else {
+			status = string(coreauth.StatusActive)
+		}
+	}
 	entry := gin.H{
 		"id":             auth.ID,
 		"auth_index":     auth.Index,
@@ -161,7 +169,7 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, metadataByName map[str
 		"type":           strings.TrimSpace(auth.Provider),
 		"provider":       strings.TrimSpace(auth.Provider),
 		"label":          auth.Label,
-		"status":         auth.Status,
+		"status":         status,
 		"status_message": auth.StatusMessage,
 		"disabled":       auth.Disabled,
 		"unavailable":    auth.Unavailable,
@@ -202,6 +210,11 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, metadataByName map[str
 	}
 	if claims := extractCodexIDTokenClaims(auth); claims != nil {
 		entry["id_token"] = claims
+	}
+	if auth.Metadata != nil {
+		if usage, ok := auth.Metadata["usage"]; ok && usage != nil {
+			entry["usage"] = usage
+		}
 	}
 	// Expose priority from Attributes (set by synthesizer from JSON "priority" field).
 	// Fall back to Metadata for auths registered via UploadAuthFile (no synthesizer).
@@ -269,6 +282,9 @@ func extractCodexIDTokenClaims(auth *coreauth.Auth) gin.H {
 	}
 	if v := claims.CodexAuthInfo.ChatgptSubscriptionActiveUntil; v != nil {
 		result["chatgpt_subscription_active_until"] = v
+	}
+	if result["chatgpt_subscription_active_start"] != nil || result["chatgpt_subscription_active_until"] != nil {
+		result["subscription"] = "active"
 	}
 
 	if len(result) == 0 {

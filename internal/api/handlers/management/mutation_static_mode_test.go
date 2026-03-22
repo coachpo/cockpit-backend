@@ -347,3 +347,76 @@ func TestListAuthFiles_ExcludesConfigBackedManagerEntries(t *testing.T) {
 		t.Fatalf("expected managed auth to remain listed, got body %s", body)
 	}
 }
+
+func TestListAuthFiles_ExposesUsageSubscriptionAndActiveFallback(t *testing.T) {
+	t.Setenv("MANAGEMENT_PASSWORD", "")
+	gin.SetMode(gin.TestMode)
+
+	manager := coreauth.NewManager(nil, nil, nil)
+	if _, errRegister := manager.Register(context.Background(), &coreauth.Auth{
+		ID:       "oauth-auth",
+		FileName: "oauth-auth.json",
+		Provider: "codex",
+		Label:    "oauth@example.com",
+		Attributes: map[string]string{
+			managedStoreAttribute: "true",
+		},
+		Metadata: map[string]any{
+			"type":     "codex",
+			"email":    "oauth@example.com",
+			"id_token": testCodexIDToken(t, "oauth@example.com", "acct_456", "team"),
+			"usage": map[string]any{
+				"remaining": 42,
+			},
+		},
+	}); errRegister != nil {
+		t.Fatalf("failed to register managed auth: %v", errRegister)
+	}
+
+	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: t.TempDir()}, manager)
+
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/v0/management/auth-files", nil)
+	h.ListAuthFiles(ctx)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected list status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Files []struct {
+			ID       string         `json:"id"`
+			Status   string         `json:"status"`
+			Usage    map[string]any `json:"usage"`
+			IDToken  map[string]any `json:"id_token"`
+			Disabled bool           `json:"disabled"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode auth files response: %v", err)
+	}
+	if len(payload.Files) != 1 {
+		t.Fatalf("expected 1 auth file, got %d (%s)", len(payload.Files), rec.Body.String())
+	}
+
+	file := payload.Files[0]
+	if file.ID != "oauth-auth" {
+		t.Fatalf("expected auth id oauth-auth, got %q", file.ID)
+	}
+	if file.Status != "active" {
+		t.Fatalf("expected blank runtime status to normalize to active, got %q", file.Status)
+	}
+	if file.Disabled {
+		t.Fatalf("expected auth file to remain enabled, got disabled=true")
+	}
+	if got := file.Usage["remaining"]; got != float64(42) {
+		t.Fatalf("expected usage payload to be exposed, got %#v", file.Usage)
+	}
+	if got := file.IDToken["plan_type"]; got != "team" {
+		t.Fatalf("expected plan_type team, got %#v", got)
+	}
+	if got := file.IDToken["subscription"]; got != "active" {
+		t.Fatalf("expected derived subscription active, got %#v", got)
+	}
+}
