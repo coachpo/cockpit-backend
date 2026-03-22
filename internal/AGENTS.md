@@ -1,6 +1,6 @@
 # internal
 
-Parent: `./AGENTS.md`
+Parent: `../AGENTS.md`
 
 ## OVERVIEW
 Private implementation tree. API routing, config/auth backends, model registry, runtime execution, translators, hot reload, logging, and relay details live here.
@@ -9,7 +9,7 @@ Private implementation tree. API routing, config/auth backends, model registry, 
 - `access/`: built-in request-access provider wiring and reconcile helpers.
 - `api/`: Gin server, route registration, websocket attachment, management routes.
 - `auth/`: private provider auth flows; current checked-in provider is Codex.
-- `browser/`, `constant/`, `interfaces/`, `misc/`: small support leaves for browser launch, provider constants, shared contracts, and focused helpers.
+- `browser/`, `constant/`, `interfaces/`, `misc/`: small support leaves for browser launch, provider constants, shared contracts, and focused helpers. Each has its own child `AGENTS.md` now.
 - `cmd/`: service startup helpers and cloud-deploy standby used by `cmd/cockpit`.
 - `config/`: split config schema, load flow, and sanitization.
 - `logging/`: base logrus setup, Gin request logging, and request IDs.

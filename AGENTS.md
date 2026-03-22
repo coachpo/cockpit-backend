@@ -1,11 +1,11 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-03-21T23:19:20+02:00
-**Commit:** 4deb29c
+**Generated:** 2026-03-22T22:25:39+02:00
+**Commit:** 96bf28e
 **Branch:** main
 
 ## OVERVIEW
-Cockpit v6 is a Go 1.26 proxy plus embeddable SDK centered on Codex OAuth, an OpenAI-compatible HTTP surface, hot-reloadable config/auth state, and websocket relay. `cmd/` stays thin around the `cockpit` binary, `internal/` owns runtime and support details, and `sdk/` exposes the reusable service/auth/handler surface.
+Cockpit v6 is a Go 1.26 proxy plus embeddable SDK centered on Codex OAuth, an OpenAI-compatible HTTP surface, hot-reloadable config/auth state, an OpenAPI snapshot, and websocket relay. `cmd/` stays thin around the `cockpit` binary, `internal/` owns runtime and support details, and `sdk/` exposes the reusable service/auth/handler surface.
 
 ## HIERARCHY RULE
 Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not restatements of the root file.
@@ -14,10 +14,11 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 ```text
 ./
 |- cmd/                 # checked-in `cockpit` binary entrypoint
+|- api/                 # trimmed OpenAPI snapshot for the current management surface
 |- internal/            # private runtime, management, logging, utility, watcher, and relay code
 |- sdk/                 # embeddable public surface
 |- test/                # cross-subsystem matrices
-|- temp/                # tracked runtime stats output under `temp/stats/`
+|- temp/                # tracked runtime output under `temp/stats/` and `temp/qa-auths/`
 |- config.example.yaml  # config-key inventory
 |- .env.example         # env var starter file
 |- Dockerfile           # container build for the cockpit binary
@@ -30,13 +31,15 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 | Task | Location | Notes |
 |------|----------|-------|
 | Start the binary | `cmd/cockpit/main.go` | flags, `.env` load, cloud deploy detection, Nacos/static bootstrap, service handoff |
+| OpenAPI surface snapshot | `api/openapi.yaml`, `internal/api/openapi_surface_test.go` | trimmed API contract must stay aligned with the live management/router surface |
 | Service startup helpers | `internal/cmd/` | `StartService`, `StartServiceBackground`, and cloud standby |
 | Built-in request access wiring | `internal/access/` | reconciles config API keys into the `sdk/access` manager |
 | Config/auth backends | `internal/nacos/` | remote Nacos stores plus static file-backed fallbacks |
-| HTTP routing + management | `internal/api/server.go` | `/v1*` routes, websocket attachment, lazy `/v0/management` enablement |
-| Management persistence APIs | `internal/api/handlers/management/` | config edits, auth files, quota toggles, OAuth callbacks, API tools |
+| HTTP routing + management | `internal/api/` | `server.go` plus `server_management.go`, keepalive, update, and route-option glue |
+| Management persistence APIs | `internal/api/handlers/management/` | config edits, auth files, Codex list endpoints, quota toggles, OAuth callbacks |
 | Request logging | `internal/logging/` | base logger, Gin middleware, request IDs |
 | Shared internal contracts | `internal/interfaces/` | handler and client-model interfaces reused across handlers and tests |
+| Small internal support leaves | `internal/browser/`, `internal/constant/`, `internal/misc/` | browser launch, provider constants, callback parsing, and focused helpers |
 | Proxy/auth utility helpers | `internal/util/` | auth-dir resolution, masking, proxy helpers, model/tool-name helpers |
 | Config lifecycle | `internal/config/` | split schema, load, and sanitization flow |
 | Model catalog | `internal/registry/` | dynamic registry plus embedded catalog lookup |
@@ -47,6 +50,7 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 | Websocket relay gateway | `internal/wsrelay/` | provider sessions, request multiplexing, stream relay |
 | Public embed API | `sdk/cliproxy/` | `Builder`, `Service`, watcher/auth integration |
 | Public HTTP handlers | `sdk/api/handlers/` | reusable request execution and error surface |
+| Public proxy helpers | `sdk/proxyutil/` | normalized proxy parsing, direct-mode transports, SOCKS/HTTP dialers |
 | Integration coverage | `test/` | large matrix, builtin-tool translation, and env-gated Nacos smoke tests |
 
 ## CODE MAP
@@ -81,11 +85,13 @@ docker compose up -d --remove-orphans
 - `internal/` owns runtime details. `sdk/` owns public contracts and reusable entrypoints.
 - Keep `cmd/` thin. Push behavior into `internal/` or `sdk/` quickly.
 - `config.example.yaml` is the fastest inventory of supported config keys.
+- `api/openapi.yaml` is the checked-in contract snapshot; keep `internal/api/openapi_surface_test.go` green when trimming routes or schemas.
 - Built-in request access providers reconcile through `internal/access/` and `sdk/access/`; do not register them ad hoc from handlers or executors.
 - Config-source changes now span `cmd/cockpit`, `internal/cmd`, `internal/nacos`, `internal/watcher`, and `sdk/cliproxy`.
 - Config-shape changes still span `internal/config/`, `internal/watcher/synthesizer/`, `internal/watcher/diff/`, and often `sdk/cliproxy/auth/`.
 - Request logging skips management endpoints on purpose and must keep allowing `/api/provider/...`.
 - `sdk/access` handles inbound request auth; `sdk/auth` covers login and token stores; `sdk/cliproxy/auth` is the runtime auth conductor.
+- `sdk/proxyutil` stays transport-level only; keep runtime behavior in `internal/runtime/executor/` or `sdk/cliproxy/`.
 - Extend existing large matrices like `test/thinking_conversion_test.go`, `internal/watcher/watcher_test.go`, and `sdk/api/handlers/openai/openai_responses_websocket_test.go` instead of creating parallel suites.
 - This checkout has no tracked README or help-site docs; do not assume them locally.
 
@@ -115,7 +121,8 @@ docker compose up -d --remove-orphans
 - `cmd/cockpit/main.go` loads `.env`, resolves Nacos vs static config/auth stores, configures logging, resolves auth dir, registers access providers, then waits for cloud config or starts the proxy service.
 - `Dockerfile` builds `cmd/cockpit` directly; keep container build path aligned with the binary directory.
 - `docker-compose.yml` defaults to the GHCR backend image published by the root `docker-images.yml` workflow; override `COCKPIT_IMAGE` only when intentionally testing a different image.
+- `api/openapi.yaml` is intentionally narrower than older multi-provider surfaces; do not revive removed endpoints by copying stale docs.
 - `test/thinking_conversion_test.go` is intentionally large. Extend the existing matrix instead of starting parallel styles.
 - `test/nacos_integration_test.go` is a live smoke test gated by `COCKPIT_NACOS_SMOKE=1` plus Nacos credentials.
 - `internal/wsrelay/` is wired from `sdk/cliproxy/service.go`; keep relay work scoped there instead of reviving removed API scaffolding.
-- `temp/stats/` is tracked runtime output, not source.
+- `temp/stats/` and `temp/qa-auths/` are tracked runtime output, not source.

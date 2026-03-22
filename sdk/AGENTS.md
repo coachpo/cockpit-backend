@@ -1,6 +1,6 @@
 # sdk
 
-Parent: `./AGENTS.md`
+Parent: `../AGENTS.md`
 
 ## OVERVIEW
 Public, embeddable surface. This tree is what downstream tools should depend on instead of `internal/`.
@@ -11,7 +11,7 @@ Public, embeddable surface. This tree is what downstream tools should depend on 
 - `api/handlers/`: reusable HTTP handler layer.
 - `auth/`: authenticator contracts and Codex login helpers.
 - `translator/`: public translation registry and pipeline.
-- `proxyutil/`: thin proxy parsing helpers shared by public callers.
+- `proxyutil/`: thin proxy parsing helpers shared by public callers; has its own child `AGENTS.md`.
 
 ## LOCAL CONVENTIONS
 - Public API changes should ripple into external docs/help-site guidance and package tests when those docs exist; this checkout has no tracked README tree.
