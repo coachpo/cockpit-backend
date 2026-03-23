@@ -726,40 +726,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/StatusOk'
 
-  /model-definitions/{channel}:
-    get:
-      summary: Get static model catalog by channel
-      parameters:
-        - in: path
-          name: channel
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: channel
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Model catalog
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  channel:
-                    type: string
-                  models:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ModelDefinition'
-        '400':
-          description: Unknown channel
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
   /codex-auth-url:
     get:
       summary: Initiate Codex OAuth flow
