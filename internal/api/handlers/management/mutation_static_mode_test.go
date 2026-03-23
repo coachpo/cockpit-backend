@@ -13,7 +13,6 @@ import (
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
-	"github.com/coachpo/cockpit-backend/internal/registry"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/gin-gonic/gin"
 )
@@ -57,65 +56,6 @@ func TestUploadAuthFile_UsesInjectedStoreWithoutWritingDisk(t *testing.T) {
 	}
 	if _, ok := manager.GetByID("upload.json"); !ok {
 		t.Fatalf("expected auth manager to be updated after upload")
-	}
-}
-
-func TestUploadAuthFile_RegistersModelsForManagedAuth(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "")
-	gin.SetMode(gin.TestMode)
-
-	authID := "upload-models.json"
-	registry.GetGlobalRegistry().UnregisterClient(authID)
-	t.Cleanup(func() {
-		registry.GetGlobalRegistry().UnregisterClient(authID)
-	})
-
-	manager := coreauth.NewManager(nil, nil, nil)
-	store := &recordingAuthStore{}
-	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: t.TempDir()}, manager)
-	h.authStore = store
-
-	uploadRec := httptest.NewRecorder()
-	uploadCtx, _ := gin.CreateTestContext(uploadRec)
-	uploadReq := httptest.NewRequest(
-		http.MethodPost,
-		"/v0/management/auth-files?name=upload-models.json",
-		bytes.NewBufferString(`{"type":"codex","email":"upload-models@example.com"}`),
-	)
-	uploadReq.Header.Set("Content-Type", "application/json")
-	uploadCtx.Request = uploadReq
-	h.UploadAuthFile(uploadCtx)
-
-	if uploadRec.Code != http.StatusOK {
-		t.Fatalf("expected upload status %d, got %d with body %s", http.StatusOK, uploadRec.Code, uploadRec.Body.String())
-	}
-
-	models := registry.GetGlobalRegistry().GetModelsForClient(authID)
-	if len(models) == 0 {
-		t.Fatal("expected uploaded managed auth to register models in the global registry")
-	}
-
-	modelsRec := httptest.NewRecorder()
-	modelsCtx, _ := gin.CreateTestContext(modelsRec)
-	modelsCtx.Request = httptest.NewRequest(
-		http.MethodGet,
-		"/v0/management/auth-files/models?name=upload-models.json",
-		nil,
-	)
-	h.GetAuthFileModels(modelsCtx)
-
-	if modelsRec.Code != http.StatusOK {
-		t.Fatalf("expected auth file models status %d, got %d with body %s", http.StatusOK, modelsRec.Code, modelsRec.Body.String())
-	}
-
-	var payload struct {
-		Models []map[string]any `json:"models"`
-	}
-	if err := json.Unmarshal(modelsRec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode auth file models response: %v", err)
-	}
-	if len(payload.Models) == 0 {
-		t.Fatal("expected auth file models response to include registered models")
 	}
 }
 
@@ -203,7 +143,7 @@ func TestPatchAuthFileFields_StaticModePersistsAndUpdatesManager(t *testing.T) {
 
 	patchRec := httptest.NewRecorder()
 	patchCtx, _ := gin.CreateTestContext(patchRec)
-	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/fields", bytes.NewBufferString(`{"name":"fields.json","prefix":"team-a","priority":7,"note":"hello"}`))
+	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/fields", bytes.NewBufferString(`{"name":"fields.json","priority":7}`))
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchCtx.Request = patchReq
 	h.PatchAuthFileFields(patchCtx)
@@ -215,11 +155,14 @@ func TestPatchAuthFileFields_StaticModePersistsAndUpdatesManager(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected auth to remain available in manager")
 	}
-	if updated.Prefix != "team-a" {
-		t.Fatalf("expected prefix team-a, got %q", updated.Prefix)
+	if updated.Prefix != "" {
+		t.Fatalf("expected prefix to remain empty, got %q", updated.Prefix)
 	}
-	if updated.Metadata == nil || updated.Metadata["priority"] == nil || updated.Metadata["note"] == nil {
-		t.Fatalf("expected metadata priority/note to be updated, got %+v", updated.Metadata)
+	if updated.Metadata == nil || updated.Metadata["priority"] == nil {
+		t.Fatalf("expected metadata priority to be updated, got %+v", updated.Metadata)
+	}
+	if _, ok := updated.Metadata["note"]; ok {
+		t.Fatalf("did not expect note metadata to be updated, got %+v", updated.Metadata)
 	}
 	raw, errRead := os.ReadFile(filePath)
 	if errRead != nil {
@@ -229,7 +172,13 @@ func TestPatchAuthFileFields_StaticModePersistsAndUpdatesManager(t *testing.T) {
 	if err := json.Unmarshal(raw, &saved); err != nil {
 		t.Fatalf("failed to decode updated auth file: %v", err)
 	}
-	if saved["prefix"] != "team-a" || saved["note"] != "hello" || saved["priority"] != float64(7) {
+	if _, ok := saved["prefix"]; ok {
+		t.Fatalf("did not expect prefix to persist, got %+v", saved)
+	}
+	if _, ok := saved["note"]; ok {
+		t.Fatalf("did not expect note to persist, got %+v", saved)
+	}
+	if saved["priority"] != float64(7) {
 		t.Fatalf("expected updated auth file to persist edited fields, got %+v", saved)
 	}
 }
@@ -386,11 +335,12 @@ func TestListAuthFiles_ExposesUsageSubscriptionAndActiveFallback(t *testing.T) {
 
 	var payload struct {
 		Files []struct {
-			ID       string         `json:"id"`
-			Status   string         `json:"status"`
-			Usage    map[string]any `json:"usage"`
-			IDToken  map[string]any `json:"id_token"`
-			Disabled bool           `json:"disabled"`
+			ID         string         `json:"id"`
+			Status     string         `json:"status"`
+			Usage      map[string]any `json:"usage"`
+			UsageProbe map[string]any `json:"usage_probe"`
+			IDToken    map[string]any `json:"id_token"`
+			Disabled   bool           `json:"disabled"`
 		} `json:"files"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
@@ -412,6 +362,12 @@ func TestListAuthFiles_ExposesUsageSubscriptionAndActiveFallback(t *testing.T) {
 	}
 	if got := file.Usage["remaining"]; got != float64(42) {
 		t.Fatalf("expected usage payload to be exposed, got %#v", file.Usage)
+	}
+	if got := file.UsageProbe["authIndex"]; got == nil || got == "" {
+		t.Fatalf("expected usage_probe authIndex to be exposed, got %#v", file.UsageProbe)
+	}
+	if got := file.UsageProbe["url"]; got != "https://chatgpt.com/backend-api/wham/usage" {
+		t.Fatalf("expected usage probe url to be set, got %#v", got)
 	}
 	if got := file.IDToken["plan_type"]; got != "team" {
 		t.Fatalf("expected plan_type team, got %#v", got)

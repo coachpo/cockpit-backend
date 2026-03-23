@@ -29,6 +29,24 @@ components:
         message:
           type: string
 
+    ManagementApiCallRequest:
+      type: object
+      required: [authIndex, method, url]
+      properties:
+        authIndex:
+          type: string
+        method:
+          type: string
+        url:
+          type: string
+        header:
+          type: object
+          additionalProperties:
+            type: string
+        body:
+          type: object
+          additionalProperties: true
+
     CodexKey:
       type: object
       properties:
@@ -91,8 +109,11 @@ components:
           format: date-time
         priority:
           type: integer
-        note:
-          type: string
+        usage:
+          type: object
+          additionalProperties: true
+        usage_probe:
+          $ref: '#/components/schemas/ManagementApiCallRequest'
 
     ModelDefinition:
       type: object
@@ -541,6 +562,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/StatusOk'
 
+  /api-call:
+    post:
+      summary: Execute a provider-authenticated management usage probe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManagementApiCallRequest'
+      responses:
+        '200':
+          description: Upstream JSON payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          description: Invalid probe request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Auth file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /auth-files:
     get:
       summary: List all auth files
@@ -602,28 +653,6 @@ paths:
                     type: string
                   deleted:
                     type: integer
-
-  /auth-files/models:
-    get:
-      summary: Get models for specific auth file
-      parameters:
-        - in: query
-          name: name
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: List of models
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  models:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ModelDefinition'
 
   /auth-files/download:
     get:
@@ -687,14 +716,8 @@ paths:
               properties:
                 name:
                   type: string
-                prefix:
-                  type: string
-                proxy_url:
-                  type: string
                 priority:
                   type: integer
-                note:
-                  type: string
       responses:
         '200':
           description: Status OK

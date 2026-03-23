@@ -54,9 +54,6 @@ func (h *Handler) buildManagedAuthRecord(name string, data []byte) (*coreauth.Au
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
-	if prefix, ok := metadata["prefix"].(string); ok {
-		auth.Prefix = strings.TrimSpace(prefix)
-	}
 	if proxyURL, ok := metadata["proxy_url"].(string); ok {
 		auth.ProxyURL = strings.TrimSpace(proxyURL)
 	}
@@ -258,7 +255,6 @@ func (h *Handler) PatchAuthFileStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "disabled": *req.Disabled})
 }
 
-// PatchAuthFileFields updates editable fields (prefix, proxy_url, priority, note) of an auth file.
 func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 	if h.authManager == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "core auth manager unavailable"})
@@ -270,11 +266,8 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 	}
 
 	var req struct {
-		Name     string  `json:"name"`
-		Prefix   *string `json:"prefix"`
-		ProxyURL *string `json:"proxy_url"`
-		Priority *int    `json:"priority"`
-		Note     *string `json:"note"`
+		Name     string `json:"name"`
+		Priority *int   `json:"priority"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -296,15 +289,7 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 	}
 
 	changed := false
-	if req.Prefix != nil {
-		targetAuth.Prefix = *req.Prefix
-		changed = true
-	}
-	if req.ProxyURL != nil {
-		targetAuth.ProxyURL = *req.ProxyURL
-		changed = true
-	}
-	if req.Priority != nil || req.Note != nil {
+	if req.Priority != nil {
 		if targetAuth.Metadata == nil {
 			targetAuth.Metadata = make(map[string]any)
 		}
@@ -312,24 +297,12 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 			targetAuth.Attributes = make(map[string]string)
 		}
 
-		if req.Priority != nil {
-			if *req.Priority == 0 {
-				delete(targetAuth.Metadata, "priority")
-				delete(targetAuth.Attributes, "priority")
-			} else {
-				targetAuth.Metadata["priority"] = *req.Priority
-				targetAuth.Attributes["priority"] = strconv.Itoa(*req.Priority)
-			}
-		}
-		if req.Note != nil {
-			trimmedNote := strings.TrimSpace(*req.Note)
-			if trimmedNote == "" {
-				delete(targetAuth.Metadata, "note")
-				delete(targetAuth.Attributes, "note")
-			} else {
-				targetAuth.Metadata["note"] = trimmedNote
-				targetAuth.Attributes["note"] = trimmedNote
-			}
+		if *req.Priority == 0 {
+			delete(targetAuth.Metadata, "priority")
+			delete(targetAuth.Attributes, "priority")
+		} else {
+			targetAuth.Metadata["priority"] = *req.Priority
+			targetAuth.Attributes["priority"] = strconv.Itoa(*req.Priority)
 		}
 		changed = true
 	}

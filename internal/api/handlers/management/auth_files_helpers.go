@@ -127,14 +127,8 @@ func buildAuthAttributes(metadata map[string]any) map[string]string {
 	if metadata == nil {
 		return attributes
 	}
-	if prefix, ok := metadata["prefix"].(string); ok && strings.TrimSpace(prefix) != "" {
-		attributes["prefix"] = strings.TrimSpace(prefix)
-	}
 	if proxyURL, ok := metadata["proxy_url"].(string); ok && strings.TrimSpace(proxyURL) != "" {
 		attributes["proxy_url"] = strings.TrimSpace(proxyURL)
-	}
-	if note, ok := metadata["note"].(string); ok && strings.TrimSpace(note) != "" {
-		attributes["note"] = strings.TrimSpace(note)
 	}
 	attributes[managedStoreAttribute] = "true"
 	switch value := metadata["priority"].(type) {

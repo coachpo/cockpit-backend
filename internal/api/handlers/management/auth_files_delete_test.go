@@ -124,7 +124,7 @@ func TestListAuthFiles_UsesStoreMetadataWhenManagerUnavailable(t *testing.T) {
 				FileName: "store-list.json",
 				Provider: "codex",
 				Label:    "store-list@example.com",
-				Metadata: map[string]any{"type": "codex", "email": "store-list@example.com", "priority": 7, "note": "hello"},
+				Metadata: map[string]any{"type": "codex", "email": "store-list@example.com", "priority": 7, "note": "hello", "prefix": "team-a"},
 			},
 		},
 	}
@@ -141,8 +141,11 @@ func TestListAuthFiles_UsesStoreMetadataWhenManagerUnavailable(t *testing.T) {
 		t.Fatalf("expected list status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "store-list.json") || !strings.Contains(body, "store-list@example.com") || !strings.Contains(body, "hello") {
+	if !strings.Contains(body, "store-list.json") || !strings.Contains(body, "store-list@example.com") || !strings.Contains(body, `"priority":7`) {
 		t.Fatalf("expected store metadata in list response, got %s", body)
+	}
+	if strings.Contains(body, "hello") || strings.Contains(body, "team-a") {
+		t.Fatalf("did not expect prefix/note in list response, got %s", body)
 	}
 }
 

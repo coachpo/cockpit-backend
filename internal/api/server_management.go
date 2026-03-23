@@ -44,7 +44,7 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.DELETE("/codex-api-key", s.mgmt.DeleteCodexKey)
 
 		mgmt.GET("/auth-files", s.mgmt.ListAuthFiles)
-		mgmt.GET("/auth-files/models", s.mgmt.GetAuthFileModels)
+		mgmt.POST("/api-call", s.mgmt.APICall)
 		mgmt.GET("/model-definitions/:channel", s.mgmt.GetStaticModelDefinitions)
 		mgmt.GET("/auth-files/download", s.mgmt.DownloadAuthFile)
 		mgmt.POST("/auth-files", s.mgmt.UploadAuthFile)

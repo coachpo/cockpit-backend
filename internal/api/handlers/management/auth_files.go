@@ -12,7 +12,6 @@ import (
 
 	"github.com/coachpo/cockpit-backend/internal/auth/codex"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
-	"github.com/coachpo/cockpit-backend/internal/registry"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
@@ -50,44 +49,6 @@ func (h *Handler) ListAuthFiles(c *gin.Context) {
 	c.JSON(200, gin.H{"files": files})
 }
 
-// GetAuthFileModels returns the models supported by a specific auth file
-func (h *Handler) GetAuthFileModels(c *gin.Context) {
-	name := c.Query("name")
-	if name == "" {
-		c.JSON(400, gin.H{"error": "name is required"})
-		return
-	}
-
-	targetAuth := h.findManagedAuth(name)
-	if targetAuth == nil {
-		c.JSON(404, gin.H{"error": "auth file not found"})
-		return
-	}
-
-	// Get models from registry
-	reg := registry.GetGlobalRegistry()
-	models := reg.GetModelsForClient(targetAuth.ID)
-
-	result := make([]gin.H, 0, len(models))
-	for _, m := range models {
-		entry := gin.H{
-			"id": m.ID,
-		}
-		if m.DisplayName != "" {
-			entry["display_name"] = m.DisplayName
-		}
-		if m.Type != "" {
-			entry["type"] = m.Type
-		}
-		if m.OwnedBy != "" {
-			entry["owned_by"] = m.OwnedBy
-		}
-		result = append(result, entry)
-	}
-
-	c.JSON(200, gin.H{"models": result})
-}
-
 func (h *Handler) listAuthFilesFromStore(c *gin.Context) {
 	items, err := h.authStore.ListMetadata(c.Request.Context())
 	if err != nil {
@@ -109,9 +70,6 @@ func (h *Handler) listAuthFilesFromStore(c *gin.Context) {
 		}
 		if item.Priority != nil {
 			entry["priority"] = *item.Priority
-		}
-		if item.Note != "" {
-			entry["note"] = item.Note
 		}
 		files = append(files, entry)
 	}
@@ -216,6 +174,9 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, metadataByName map[str
 			entry["usage"] = usage
 		}
 	}
+	if usageProbe := buildUsageProbe(auth); usageProbe != nil {
+		entry["usage_probe"] = usageProbe
+	}
 	// Expose priority from Attributes (set by synthesizer from JSON "priority" field).
 	// Fall back to Metadata for auths registered via UploadAuthFile (no synthesizer).
 	if p := strings.TrimSpace(authAttribute(auth, "priority")); p != "" {
@@ -236,18 +197,36 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, metadataByName map[str
 			}
 		}
 	}
-	// Expose note from Attributes (set by synthesizer from JSON "note" field).
-	// Fall back to Metadata for auths registered via UploadAuthFile (no synthesizer).
-	if note := strings.TrimSpace(authAttribute(auth, "note")); note != "" {
-		entry["note"] = note
-	} else if auth.Metadata != nil {
-		if rawNote, ok := auth.Metadata["note"].(string); ok {
-			if trimmed := strings.TrimSpace(rawNote); trimmed != "" {
-				entry["note"] = trimmed
-			}
+	return entry
+}
+
+func buildUsageProbe(auth *coreauth.Auth) gin.H {
+	if auth == nil {
+		return nil
+	}
+	if !strings.EqualFold(strings.TrimSpace(auth.Provider), "codex") {
+		return nil
+	}
+	index := auth.EnsureIndex()
+	if index == "" {
+		return nil
+	}
+	header := gin.H{
+		"Authorization": "Bearer $TOKEN$",
+		"Content-Type":  "application/json",
+		"User-Agent":    "codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal",
+	}
+	if claims := extractCodexIDTokenClaims(auth); claims != nil {
+		if accountID, ok := claims["chatgpt_account_id"].(string); ok && strings.TrimSpace(accountID) != "" {
+			header["Chatgpt-Account-Id"] = strings.TrimSpace(accountID)
 		}
 	}
-	return entry
+	return gin.H{
+		"authIndex": index,
+		"method":    http.MethodGet,
+		"url":       "https://chatgpt.com/backend-api/wham/usage",
+		"header":    header,
+	}
 }
 
 func extractCodexIDTokenClaims(auth *coreauth.Auth) gin.H {

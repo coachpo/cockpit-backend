@@ -26,7 +26,6 @@ func TestOpenAPIDocMatchesTrimmedManagementSurface(t *testing.T) {
 		"/debug:",
 		"/request-log:",
 		"/proxy-url:",
-		"/api-call:",
 		"/quota-exceeded/switch-preview-model:",
 		"/force-model-prefix:",
 		"/oauth-excluded-models:",
@@ -47,7 +46,7 @@ func TestOpenAPIDocMatchesTrimmedManagementSurface(t *testing.T) {
 		"/api-keys:",
 		"/codex-api-key:",
 		"/auth-files:",
-		"/auth-files/models:",
+		"/api-call:",
 		"/auth-files/download:",
 		"/auth-files/status:",
 		"/auth-files/fields:",
@@ -58,6 +57,15 @@ func TestOpenAPIDocMatchesTrimmedManagementSurface(t *testing.T) {
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("expected %q in api/openapi.yaml", required)
+		}
+	}
+
+	for _, bannedNow := range []string{
+		"/auth-files/models:",
+		"prefix:",
+	} {
+		if strings.Contains(text, bannedNow) {
+			t.Fatalf("did not expect %q in api/openapi.yaml", bannedNow)
 		}
 	}
 }
