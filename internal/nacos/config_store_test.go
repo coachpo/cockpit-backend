@@ -50,6 +50,11 @@ func TestNacosConfigStoreParseConfigRejectsRemovedKeys(t *testing.T) {
 			wantErr: "switch-preview-model",
 		},
 		{
+			name:    "removed remote management block",
+			raw:     "port: 8080\nremote-management:\n  allow-remote: false\n",
+			wantErr: "remote-management",
+		},
+		{
 			name:    "removed codex subfield",
 			raw:     "codex-api-key:\n  - api-key: test\n    base-url: https://example.invalid/v1\n    proxy-url: https://proxy.invalid\n",
 			wantErr: "proxy-url",

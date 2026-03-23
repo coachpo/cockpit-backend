@@ -25,7 +25,6 @@ func TestBuildConfigChangeDetails_RetainedSurface(t *testing.T) {
 			Websockets: false,
 			Headers:    map[string]string{"H": "1"},
 		}},
-		RemoteManagement: config.RemoteManagement{AllowRemote: false, SecretKey: "old"},
 		SDKConfig: sdkconfig.SDKConfig{
 			APIKeys:                    []string{"key-1"},
 			PassthroughHeaders:         false,
@@ -51,7 +50,6 @@ func TestBuildConfigChangeDetails_RetainedSurface(t *testing.T) {
 			Websockets: true,
 			Headers:    map[string]string{"H": "2"},
 		}},
-		RemoteManagement: config.RemoteManagement{AllowRemote: true, SecretKey: ""},
 		SDKConfig: sdkconfig.SDKConfig{
 			APIKeys:                    []string{"key-1", "key-2"},
 			PassthroughHeaders:         true,
@@ -83,38 +81,12 @@ func TestBuildConfigChangeDetails_RetainedSurface(t *testing.T) {
 	expectContains(t, changes, "codex[0].headers: updated")
 	expectContains(t, changes, "codex-header-defaults.user-agent: ua-old -> ua-new")
 	expectContains(t, changes, "codex-header-defaults.beta-features: beta-old -> beta-new")
-	expectContains(t, changes, "remote-management.allow-remote: false -> true")
-	expectContains(t, changes, "remote-management.secret-key: deleted")
 }
 
 func TestBuildConfigChangeDetails_NoChanges(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	if details := BuildConfigChangeDetails(cfg, cfg); len(details) != 0 {
 		t.Fatalf("expected no change entries, got %v", details)
-	}
-}
-
-func TestBuildConfigChangeDetails_SecretBranches(t *testing.T) {
-	created := BuildConfigChangeDetails(
-		&config.Config{RemoteManagement: config.RemoteManagement{SecretKey: ""}},
-		&config.Config{RemoteManagement: config.RemoteManagement{SecretKey: "new"}},
-	)
-	expectContains(t, created, "remote-management.secret-key: created")
-
-	updated := BuildConfigChangeDetails(
-		&config.Config{RemoteManagement: config.RemoteManagement{SecretKey: "old"}},
-		&config.Config{RemoteManagement: config.RemoteManagement{SecretKey: "new"}},
-	)
-	expectContains(t, updated, "remote-management.secret-key: updated")
-
-	bcryptRehash := BuildConfigChangeDetails(
-		&config.Config{RemoteManagement: config.RemoteManagement{SecretKey: "$2a$10$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
-		&config.Config{RemoteManagement: config.RemoteManagement{SecretKey: "$2a$10$bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
-	)
-	for _, entry := range bcryptRehash {
-		if entry == "remote-management.secret-key: updated" {
-			t.Fatalf("did not expect bcrypt-to-bcrypt secret rehash to produce updated diff: %v", bcryptRehash)
-		}
 	}
 }
 

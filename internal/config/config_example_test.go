@@ -33,15 +33,11 @@ func TestConfigExampleIncludesCurrentInventory(t *testing.T) {
 		"passthrough-headers",
 		"port",
 		"quota-exceeded",
-		"remote-management",
 		"request-retry",
 		"routing",
 		"streaming",
 		"ws-auth",
 	})
-
-	remoteManagement := assertNestedMap(t, example, "remote-management")
-	assertExactMapKeys(t, remoteManagement, []string{"allow-remote", "secret-key"})
 
 	quotaExceeded := assertNestedMap(t, example, "quota-exceeded")
 	assertExactMapKeys(t, quotaExceeded, []string{"switch-project"})

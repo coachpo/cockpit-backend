@@ -14,7 +14,6 @@ func TestConfigSchemaMatchesTrimmedSurface(t *testing.T) {
 	assertStructFieldsExactly(t, reflect.TypeOf(Config{}), []string{
 		"Host",
 		"Port",
-		"RemoteManagement",
 		"AuthDir",
 		"DisableCooling",
 		"RequestRetry",
@@ -35,7 +34,6 @@ func TestConfigSchemaMatchesTrimmedSurface(t *testing.T) {
 	})
 
 	assertStructFieldsExactly(t, reflect.TypeOf(QuotaExceeded{}), []string{"SwitchProject"})
-	assertStructFieldsExactly(t, reflect.TypeOf(RemoteManagement{}), []string{"AllowRemote", "SecretKey"})
 	assertStructFieldsExactly(t, reflect.TypeOf(RoutingConfig{}), []string{"Strategy"})
 	assertStructFieldsExactly(t, reflect.TypeOf(CodexHeaderDefaults{}), []string{"UserAgent", "BetaFeatures"})
 	assertStructFieldsExactly(t, reflect.TypeOf(StreamingConfig{}), []string{"KeepAliveSeconds", "BootstrapRetries"})
@@ -51,7 +49,6 @@ func TestConfigSchemaMatchesTrimmedSurface(t *testing.T) {
 	assertConfigGoTypeNamesExactly(t, []string{
 		"Config",
 		"CodexHeaderDefaults",
-		"RemoteManagement",
 		"QuotaExceeded",
 		"RoutingConfig",
 		"CodexKey",

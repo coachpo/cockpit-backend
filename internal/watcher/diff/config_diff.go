@@ -99,21 +99,6 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 		changes = append(changes, fmt.Sprintf("codex-header-defaults.beta-features: %s -> %s", oldCfg.CodexHeaderDefaults.BetaFeatures, newCfg.CodexHeaderDefaults.BetaFeatures))
 	}
 
-	// Remote management (never print the key)
-	if oldCfg.RemoteManagement.AllowRemote != newCfg.RemoteManagement.AllowRemote {
-		changes = append(changes, fmt.Sprintf("remote-management.allow-remote: %t -> %t", oldCfg.RemoteManagement.AllowRemote, newCfg.RemoteManagement.AllowRemote))
-	}
-	if oldCfg.RemoteManagement.SecretKey != newCfg.RemoteManagement.SecretKey {
-		switch {
-		case oldCfg.RemoteManagement.SecretKey == "" && newCfg.RemoteManagement.SecretKey != "":
-			changes = append(changes, "remote-management.secret-key: created")
-		case oldCfg.RemoteManagement.SecretKey != "" && newCfg.RemoteManagement.SecretKey == "":
-			changes = append(changes, "remote-management.secret-key: deleted")
-		case !looksLikeBcrypt(oldCfg.RemoteManagement.SecretKey) || !looksLikeBcrypt(newCfg.RemoteManagement.SecretKey):
-			changes = append(changes, "remote-management.secret-key: updated")
-		}
-	}
-
 	return changes
 }
 
@@ -135,8 +120,4 @@ func equalStringMap(a, b map[string]string) bool {
 		}
 	}
 	return true
-}
-
-func looksLikeBcrypt(s string) bool {
-	return len(s) > 4 && (s[:4] == "$2a$" || s[:4] == "$2b$" || s[:4] == "$2y$")
 }

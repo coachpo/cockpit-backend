@@ -8,11 +8,6 @@ servers:
     description: Local management server
 
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-
   schemas:
     Config:
       type: object
@@ -110,10 +105,6 @@ components:
           type: string
         owned_by:
           type: string
-
-security:
-  - BearerAuth: []
-
 paths:
   /ws-auth:
     get:

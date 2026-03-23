@@ -24,6 +24,11 @@ func TestLoadConfigRejectsUnknownRemovedKeys(t *testing.T) {
 			wantErr: "switch-preview-model",
 		},
 		{
+			name:    "removed remote management block",
+			yaml:    "port: 8080\nremote-management:\n  allow-remote: false\n",
+			wantErr: "remote-management",
+		},
+		{
 			name:    "removed codex subfield",
 			yaml:    "port: 8080\ncodex-api-key:\n  - api-key: test\n    base-url: https://example.invalid/v1\n    proxy-url: https://proxy.invalid\n",
 			wantErr: "proxy-url",

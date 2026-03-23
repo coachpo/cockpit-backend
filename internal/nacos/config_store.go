@@ -10,7 +10,6 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -61,7 +60,7 @@ func (s *NacosConfigStore) SaveConfig(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	if err = sanitizeConfig(persistCfg, true); err != nil {
+	if err = sanitizeConfig(persistCfg); err != nil {
 		return err
 	}
 
@@ -182,7 +181,7 @@ func (s *NacosConfigStore) parseConfig(raw string) (*config.Config, string, erro
 	if err := decoder.Decode(cfg); err != nil {
 		return nil, "", fmt.Errorf("nacos config store: unmarshal config: %w", err)
 	}
-	if err := sanitizeConfig(cfg, true); err != nil {
+	if err := sanitizeConfig(cfg); err != nil {
 		return nil, "", err
 	}
 	return cfg, md5Hex(raw), nil
@@ -208,17 +207,9 @@ func cloneConfig(cfg *config.Config) (*config.Config, error) {
 	return clone, nil
 }
 
-func sanitizeConfig(cfg *config.Config, hashRemoteSecret bool) error {
+func sanitizeConfig(cfg *config.Config) error {
 	if cfg == nil {
 		return fmt.Errorf("nacos config store: config is nil")
-	}
-
-	if hashRemoteSecret && cfg.RemoteManagement.SecretKey != "" && !looksLikeBcryptHash(cfg.RemoteManagement.SecretKey) {
-		hashed, err := hashSecretValue(cfg.RemoteManagement.SecretKey)
-		if err != nil {
-			return fmt.Errorf("nacos config store: hash remote management key: %w", err)
-		}
-		cfg.RemoteManagement.SecretKey = hashed
 	}
 
 	if cfg.MaxRetryCredentials < 0 {
@@ -246,16 +237,4 @@ func validateCodexKeys(cfg *config.Config) error {
 func md5Hex(raw string) string {
 	sum := md5.Sum([]byte(raw))
 	return fmt.Sprintf("%x", sum)
-}
-
-func looksLikeBcryptHash(value string) bool {
-	return len(value) > 4 && (value[:4] == "$2a$" || value[:4] == "$2b$" || value[:4] == "$2y$")
-}
-
-func hashSecretValue(secret string) (string, error) {
-	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedBytes), nil
 }

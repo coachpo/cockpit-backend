@@ -14,18 +14,7 @@ import (
 	sdkaccess "github.com/coachpo/cockpit-backend/sdk/access"
 	"github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	gin "github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 )
-
-func hashManagementSecret(t *testing.T, secret string) string {
-	t.Helper()
-
-	hashed, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatalf("failed to hash management secret: %v", err)
-	}
-	return string(hashed)
-}
 
 func newTestServer(t *testing.T, mutate func(*proxyconfig.Config), opts ...ServerOption) *Server {
 	t.Helper()
@@ -86,9 +75,7 @@ func performManagementRequest(server *Server, route managementRouteCase, authHea
 	return rec
 }
 
-func TestManagementRetainedRouteAlwaysMountedWithoutSecret(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "")
-
+func TestManagementRetainedRouteIsAccessibleWithoutAuthorization(t *testing.T) {
 	server := newTestServer(t, nil)
 
 	rec := performManagementRequest(server, managementRouteCase{
@@ -96,25 +83,20 @@ func TestManagementRetainedRouteAlwaysMountedWithoutSecret(t *testing.T) {
 		path:   "/v0/management/ws-auth",
 	}, "")
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected ws-auth route status %d, got %d with body %s", http.StatusForbidden, rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "remote management key not set") {
-		t.Fatalf("expected missing management key configuration error, got %s", rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected ws-auth route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 }
 
-func TestManagementRetainedRouteUsesConfiguredBearerAuth(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "")
+func TestManagementRetainedRouteIgnoresManagementPasswordEnv(t *testing.T) {
+	t.Setenv("MANAGEMENT_PASSWORD", "secret")
 
-	server := newTestServer(t, func(cfg *proxyconfig.Config) {
-		cfg.RemoteManagement.SecretKey = hashManagementSecret(t, "secret")
-	})
+	server := newTestServer(t, nil)
 
 	rec := performManagementRequest(server, managementRouteCase{
 		method: http.MethodGet,
 		path:   "/v0/management/ws-auth",
-	}, "Bearer secret")
+	}, "")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected ws-auth route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
@@ -130,27 +112,7 @@ func TestManagementRetainedRouteUsesConfiguredBearerAuth(t *testing.T) {
 	}
 }
 
-func TestManagementRetainedRouteDoesNotUseManagementPasswordEnv(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "secret")
-
-	server := newTestServer(t, nil)
-
-	rec := performManagementRequest(server, managementRouteCase{
-		method: http.MethodGet,
-		path:   "/v0/management/ws-auth",
-	}, "Bearer secret")
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected ws-auth route status %d, got %d with body %s", http.StatusForbidden, rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "remote management key not set") {
-		t.Fatalf("expected missing management key configuration error, got %s", rec.Body.String())
-	}
-}
-
 func TestManagementRemovedRoutesAreNotMounted(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "")
-
 	removedRoutes := []managementRouteCase{
 		{name: "config get", method: http.MethodGet, path: "/v0/management/config"},
 		{name: "config yaml get", method: http.MethodGet, path: "/v0/management/config.yaml"},
@@ -185,10 +147,8 @@ func TestManagementRemovedRoutesAreNotMounted(t *testing.T) {
 
 	for _, route := range removedRoutes {
 		t.Run(route.name, func(t *testing.T) {
-			server := newTestServer(t, func(cfg *proxyconfig.Config) {
-				cfg.RemoteManagement.SecretKey = hashManagementSecret(t, "secret")
-			})
-			rec := performManagementRequest(server, route, "Bearer secret")
+			server := newTestServer(t, nil)
+			rec := performManagementRequest(server, route, "")
 			if rec.Code != http.StatusNotFound {
 				t.Fatalf("expected removed route %s %s to return %d, got %d with body %s", route.method, route.path, http.StatusNotFound, rec.Code, rec.Body.String())
 			}
@@ -197,8 +157,6 @@ func TestManagementRemovedRoutesAreNotMounted(t *testing.T) {
 }
 
 func TestManagementRetainedRoutesRemainMounted(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "")
-
 	retainedRoutes := []managementRouteCase{
 		{name: "ws auth get", method: http.MethodGet, path: "/v0/management/ws-auth"},
 		{name: "ws auth put", method: http.MethodPut, path: "/v0/management/ws-auth", body: `{"value":true}`, contentType: "application/json"},
@@ -239,7 +197,6 @@ func TestManagementRetainedRoutesRemainMounted(t *testing.T) {
 	for _, route := range retainedRoutes {
 		t.Run(route.name, func(t *testing.T) {
 			server := newTestServer(t, func(cfg *proxyconfig.Config) {
-				cfg.RemoteManagement.SecretKey = hashManagementSecret(t, "secret")
 				cfg.CodexKey = []proxyconfig.CodexKey{{
 					APIKey:  "existing-key",
 					BaseURL: "https://example.com",
@@ -251,7 +208,7 @@ func TestManagementRetainedRoutesRemainMounted(t *testing.T) {
 					managementhandlers.CompleteOAuthSession("state-123")
 				})
 			}
-			rec := performManagementRequest(server, route, "Bearer secret")
+			rec := performManagementRequest(server, route, "")
 			if rec.Code == http.StatusNotFound {
 				t.Fatalf("expected retained route %s %s to stay mounted, got %d with body %s", route.method, route.path, rec.Code, rec.Body.String())
 			}

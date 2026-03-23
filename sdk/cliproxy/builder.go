@@ -194,12 +194,12 @@ func (b *Builder) Build() (*Service, error) {
 
 	configSource := b.configSource
 	if configSource == nil {
-		configSource = nacos.NewStaticConfigSource(b.configPath)
+		return nil, fmt.Errorf("cockpit: config source is required")
 	}
 
 	authStore := b.authStore
 	if authStore == nil {
-		authStore = nacos.NewStaticAuthStore(b.cfg.AuthDir)
+		return nil, fmt.Errorf("cockpit: auth store is required")
 	}
 
 	authManager := b.authManager

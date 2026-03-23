@@ -50,7 +50,7 @@ func (s *StaticConfigSource) SaveConfig(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	if err = sanitizeConfig(persistCfg, true); err != nil {
+	if err = sanitizeConfig(persistCfg); err != nil {
 		return err
 	}
 

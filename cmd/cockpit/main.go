@@ -24,18 +24,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const configPathUsage = "Path to the YAML config file (defaults to ./cockpit/config.yaml)"
+const configPathUsage = "Runtime config path for internal bookkeeping (defaults to ./cockpit/config.yaml; configuration is loaded from Nacos)"
 
 // init initializes the shared logger setup.
 func init() {
 	logging.SetupBaseLogger()
-}
-
-func warnIfUsingLocalStaticMode(configSource nacos.ConfigSource, configFilePath string) {
-	if configSource == nil || configSource.Mode() != "static" {
-		return
-	}
-	log.Infof("Running in local static file mode using %q; local config file changes are not watched. Set NACOS_ADDR to enable live config reloads.", configFilePath)
 }
 
 func newCommandFlagSet(name string) *flag.FlagSet {
@@ -93,37 +86,26 @@ type bootstrapConfig struct {
 }
 
 type bootstrapLoaders struct {
-	nacosAddr  string
-	loadNacos  func() (*bootstrapConfig, error)
-	loadStatic func(configFilePath string) (*bootstrapConfig, error)
+	nacosAddr string
+	loadNacos func() (*bootstrapConfig, error)
 }
 
-func resolveBootstrapConfig(configFilePath string, loaders bootstrapLoaders) (*bootstrapConfig, error) {
+func resolveBootstrapConfig(loaders bootstrapLoaders) (*bootstrapConfig, error) {
 	if loaders.loadNacos == nil {
 		loaders.loadNacos = loadNacosBootstrapConfig
 	}
-	if loaders.loadStatic == nil {
-		loaders.loadStatic = loadStaticBootstrapConfig
-	}
 
 	nacosAddr := strings.TrimSpace(loaders.nacosAddr)
-	if nacosAddr != "" {
-		loaded, err := loaders.loadNacos()
-		if err != nil {
-			return nil, fmt.Errorf("failed to bootstrap from nacos: %w", err)
-		}
-		if err := validateBootstrapConfig("nacos", loaded); err != nil {
-			return nil, fmt.Errorf("failed to bootstrap from nacos: %w", err)
-		}
-		return loaded, nil
+	if nacosAddr == "" {
+		return nil, fmt.Errorf("failed to bootstrap from nacos: NACOS_ADDR is required")
 	}
 
-	loaded, err := loaders.loadStatic(configFilePath)
+	loaded, err := loaders.loadNacos()
 	if err != nil {
-		return nil, fmt.Errorf("failed to bootstrap from local static config: %w", err)
+		return nil, fmt.Errorf("failed to bootstrap from nacos: %w", err)
 	}
-	if err := validateBootstrapConfig("static", loaded); err != nil {
-		return nil, fmt.Errorf("failed to bootstrap from local static config: %w", err)
+	if err := validateBootstrapConfig("nacos", loaded); err != nil {
+		return nil, fmt.Errorf("failed to bootstrap from nacos: %w", err)
 	}
 	return loaded, nil
 }
@@ -151,18 +133,6 @@ func loadNacosBootstrapConfig() (*bootstrapConfig, error) {
 	}, nil
 }
 
-func loadStaticBootstrapConfig(configFilePath string) (*bootstrapConfig, error) {
-	cfg, err := config.LoadConfig(configFilePath)
-	if err != nil {
-		return nil, err
-	}
-
-	return &bootstrapConfig{
-		cfg:          cfg,
-		configSource: nacos.NewStaticConfigSource(configFilePath),
-	}, nil
-}
-
 func validateBootstrapConfig(sourceName string, loaded *bootstrapConfig) error {
 	if loaded == nil {
 		return fmt.Errorf("%s bootstrap returned nil result", sourceName)
@@ -170,8 +140,11 @@ func validateBootstrapConfig(sourceName string, loaded *bootstrapConfig) error {
 	if loaded.configSource == nil {
 		return fmt.Errorf("%s bootstrap returned nil config source", sourceName)
 	}
+	if loaded.authStore == nil {
+		return fmt.Errorf("%s bootstrap returned nil auth store", sourceName)
+	}
 	if loaded.cfg == nil {
-		loaded.cfg = &config.Config{}
+		return fmt.Errorf("%s bootstrap returned nil config", sourceName)
 	}
 	return nil
 }
@@ -210,7 +183,7 @@ func main() {
 		configFilePath = filepath.Join(wd, "cockpit", "config.yaml")
 	}
 
-	loaded, err := resolveBootstrapConfig(configFilePath, bootstrapLoaders{nacosAddr: os.Getenv("NACOS_ADDR")})
+	loaded, err := resolveBootstrapConfig(bootstrapLoaders{nacosAddr: os.Getenv("NACOS_ADDR")})
 	if err != nil {
 		log.Errorf("failed to bootstrap configuration: %v", err)
 		os.Exit(1)
@@ -225,7 +198,6 @@ func main() {
 		log.Errorf("failed to configure log output: %v", err)
 		return
 	}
-	warnIfUsingLocalStaticMode(configSource, configFilePath)
 
 	// Set the log level based on the configuration.
 	util.SetLogLevel(cfg)
@@ -239,9 +211,6 @@ func main() {
 		return
 	} else {
 		cfg.AuthDir = resolvedAuthDir
-	}
-	if authStore == nil {
-		authStore = nacos.NewStaticAuthStore(cfg.AuthDir)
 	}
 
 	// Register built-in access providers before constructing services.

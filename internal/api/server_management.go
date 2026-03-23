@@ -13,7 +13,6 @@ func (s *Server) registerManagementRoutes() {
 	log.Info("management routes registered")
 
 	mgmt := s.engine.Group("/v0/management")
-	mgmt.Use(s.mgmt.Middleware())
 	{
 		mgmt.GET("/quota-exceeded/switch-project", s.mgmt.GetSwitchProject)
 		mgmt.PUT("/quota-exceeded/switch-project", s.mgmt.PutSwitchProject)

@@ -8,10 +8,6 @@ streaming:
 nonstream-keepalive-interval: 0
 host: ""
 port: 8317
-remote-management:
-  allow-remote: false
-  # Plaintext values are hashed automatically when the config is loaded or saved.
-  secret-key: "change-me-to-a-strong-password"
 auth-dir: "./cockpit"
 disable-cooling: false
 request-retry: 3

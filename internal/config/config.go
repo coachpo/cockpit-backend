@@ -13,9 +13,6 @@ type Config struct {
 	// Port is the network port on which the API server will listen.
 	Port int `yaml:"port" json:"-"`
 
-	// RemoteManagement nests management-related options under 'remote-management'.
-	RemoteManagement RemoteManagement `yaml:"remote-management" json:"-"`
-
 	// AuthDir is the directory where authentication token files are stored.
 	AuthDir string `yaml:"auth-dir" json:"-"`
 
@@ -53,14 +50,6 @@ type Config struct {
 type CodexHeaderDefaults struct {
 	UserAgent    string `yaml:"user-agent" json:"user-agent"`
 	BetaFeatures string `yaml:"beta-features" json:"beta-features"`
-}
-
-// RemoteManagement holds management API configuration under 'remote-management'.
-type RemoteManagement struct {
-	// AllowRemote toggles remote (non-localhost) access to management API.
-	AllowRemote bool `yaml:"allow-remote"`
-	// SecretKey is the management key (plaintext or bcrypt hashed). YAML key intentionally 'secret-key'.
-	SecretKey string `yaml:"secret-key"`
 }
 
 // QuotaExceeded defines the behavior when API quota limits are exceeded.

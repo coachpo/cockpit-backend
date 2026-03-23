@@ -19,9 +19,6 @@ func TestStaticConfigSourceSaveConfigWritesFile(t *testing.T) {
 	cfg := &config.Config{
 		Port:         8317,
 		RequestRetry: 4,
-		RemoteManagement: config.RemoteManagement{
-			SecretKey: "plain-secret",
-		},
 	}
 
 	if err := source.SaveConfig(cfg); err != nil {
@@ -32,8 +29,8 @@ func TestStaticConfigSourceSaveConfigWritesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read saved config: %v", err)
 	}
-	if strings.Contains(string(raw), "plain-secret") {
-		t.Fatalf("expected saved config to hash the management secret, got %s", string(raw))
+	if strings.Contains(string(raw), "remote-management") {
+		t.Fatalf("expected saved config to omit removed remote-management block, got %s", string(raw))
 	}
 
 	loaded, err := config.LoadConfig(configPath)
@@ -45,9 +42,6 @@ func TestStaticConfigSourceSaveConfigWritesFile(t *testing.T) {
 	}
 	if loaded.RequestRetry != 4 {
 		t.Fatalf("expected request retry 4, got %d", loaded.RequestRetry)
-	}
-	if loaded.RemoteManagement.SecretKey == "" || loaded.RemoteManagement.SecretKey == "plain-secret" {
-		t.Fatalf("expected hashed management secret, got %q", loaded.RemoteManagement.SecretKey)
 	}
 }
 

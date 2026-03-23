@@ -3,18 +3,15 @@
 package management
 
 import (
-	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -80,50 +77,6 @@ func (h *Handler) SetLogDirectory(dir string) {
 // SetPostAuthHook registers a hook to be called after auth record creation but before persistence.
 func (h *Handler) SetPostAuthHook(hook coreauth.PostAuthHook) {
 	h.postAuthHook = hook
-}
-
-// Middleware enforces Bearer-only access control for management endpoints.
-func (h *Handler) Middleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		secret := ""
-		if h.cfg != nil {
-			secret = strings.TrimSpace(h.cfg.RemoteManagement.SecretKey)
-		}
-		if secret == "" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "remote management key not set"})
-			return
-		}
-
-		var provided string
-		if ah := strings.TrimSpace(c.GetHeader("Authorization")); ah != "" {
-			parts := strings.SplitN(ah, " ", 2)
-			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-				provided = strings.TrimSpace(parts[1])
-			}
-		}
-
-		if provided == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing management key"})
-			return
-		}
-
-		if !managementSecretMatches(secret, provided) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid management key"})
-			return
-		}
-
-		c.Next()
-	}
-}
-
-func managementSecretMatches(secret string, provided string) bool {
-	if secret == "" || provided == "" {
-		return false
-	}
-	if strings.HasPrefix(secret, "$2a$") || strings.HasPrefix(secret, "$2b$") || strings.HasPrefix(secret, "$2y$") {
-		return bcrypt.CompareHashAndPassword([]byte(secret), []byte(provided)) == nil
-	}
-	return subtle.ConstantTimeCompare([]byte(secret), []byte(provided)) == 1
 }
 
 func cloneConfig(cfg *config.Config) (*config.Config, error) {

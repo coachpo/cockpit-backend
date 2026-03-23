@@ -23,9 +23,8 @@ import (
 )
 
 const (
-	nacosSmokeConfigDataID     = "proxy-config"
-	nacosSmokeAuthDataID       = "auth-credentials"
-	nacosSmokeManagementSecret = "nacos-smoke-management"
+	nacosSmokeConfigDataID = "proxy-config"
+	nacosSmokeAuthDataID   = "auth-credentials"
 )
 
 type nacosSmokeConfig struct {
@@ -372,8 +371,6 @@ func runNacosSmokeTest(t *testing.T, cfg nacosSmokeConfig) error {
 	t.Setenv("NACOS_GROUP", cfg.group)
 	t.Setenv("NACOS_USERNAME", cfg.username)
 	t.Setenv("NACOS_PASSWORD", cfg.password)
-	t.Setenv("MANAGEMENT_PASSWORD", nacosSmokeManagementSecret)
-
 	runtimeClient, err := nacos.NewClientFromEnv()
 	if err != nil {
 		return fmt.Errorf("create runtime nacos client: %w", err)
@@ -465,10 +462,6 @@ func TestBuildSmokeConfig_UsesRetainedSchema(t *testing.T) {
 	const want = `host: ""
 port: 8317
 
-remote-management:
-  allow-remote: false
-  secret-key: "change-me-to-a-strong-password"
-
 auth-dir: "~/.cockpit"
 
 disable-cooling: true
@@ -494,10 +487,6 @@ ws-auth: false
 func buildSmokeConfig(port int, disableCooling bool, passthroughHeaders bool) string {
 	return fmt.Sprintf(`host: ""
 port: %d
-
-remote-management:
-  allow-remote: false
-  secret-key: "change-me-to-a-strong-password"
 
 auth-dir: "~/.cockpit"
 
@@ -718,7 +707,6 @@ func fetchManagementAuthFiles(httpClient *http.Client, port int) ([]managementAu
 	if err != nil {
 		return nil, fmt.Errorf("build management auth request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+nacosSmokeManagementSecret)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -747,7 +735,6 @@ func uploadManagementAuthFile(httpClient *http.Client, port int, name string, bo
 	if err != nil {
 		return fmt.Errorf("build management upload request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+nacosSmokeManagementSecret)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)

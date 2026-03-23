@@ -4,11 +4,6 @@
 host: "127.0.0.1"
 port: 8317
 
-remote-management:
-  allow-remote: false
-  # Plaintext values are hashed automatically when the config is loaded or saved.
-  secret-key: "change-me-to-a-strong-password"
-
 # In local static mode, auth JSON files live here if you add OAuth/file-backed auth later.
 auth-dir: "./cockpit"
 

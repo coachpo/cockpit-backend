@@ -15,6 +15,9 @@ func TestOpenAPIDocMatchesTrimmedManagementSurface(t *testing.T) {
 	text := string(contents)
 
 	for _, banned := range []string{
+		"BearerAuth:",
+		"securitySchemes:",
+		"security:\n  - BearerAuth: []",
 		"ManagementKeyHeader:",
 		"- ManagementKeyHeader: []",
 		"/config:",

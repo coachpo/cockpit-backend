@@ -7,7 +7,6 @@ import (
 	"os"
 	"syscall"
 
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,13 +35,6 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	if err = decoder.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
-	if cfg.RemoteManagement.SecretKey != "" && !looksLikeBcrypt(cfg.RemoteManagement.SecretKey) {
-		hashed, errHash := hashSecret(cfg.RemoteManagement.SecretKey)
-		if errHash != nil {
-			return nil, fmt.Errorf("failed to hash remote management key: %w", errHash)
-		}
-		cfg.RemoteManagement.SecretKey = hashed
-	}
 	if cfg.MaxRetryCredentials < 0 {
 		cfg.MaxRetryCredentials = 0
 	}
@@ -54,16 +46,4 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	}
 	cfg.SanitizeCodexHeaderDefaults()
 	return &cfg, nil
-}
-
-func looksLikeBcrypt(s string) bool {
-	return len(s) > 4 && (s[:4] == "$2a$" || s[:4] == "$2b$" || s[:4] == "$2y$")
-}
-
-func hashSecret(secret string) (string, error) {
-	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedBytes), nil
 }
