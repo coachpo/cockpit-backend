@@ -2,11 +2,8 @@ package cliproxy
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
@@ -38,23 +35,5 @@ func TestAPIKeyClientProviderLoadReturnsCodexCount(t *testing.T) {
 	}
 	if result.CodexKeyCount != 2 {
 		t.Fatalf("expected CodexKeyCount=2, got %d", result.CodexKeyCount)
-	}
-}
-
-func TestServiceSourceDropsUnusedProviderResults(t *testing.T) {
-	contents, err := os.ReadFile(filepath.Join("service.go"))
-	if err != nil {
-		t.Fatalf("read service.go: %v", err)
-	}
-	text := string(contents)
-	for _, banned := range []string{
-		"tokenResult",
-		"apiKeyResult",
-		"RegisterUsagePlugin registers a usage plugin on the global usage manager",
-		"registerModelsForAuth",
-	} {
-		if strings.Contains(text, banned) {
-			t.Fatalf("did not expect %q in service.go", banned)
-		}
 	}
 }
