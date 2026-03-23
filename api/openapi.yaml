@@ -29,6 +29,24 @@ components:
         message:
           type: string
 
+    ManagementApiCallRequest:
+      type: object
+      required: [authIndex, method, url]
+      properties:
+        authIndex:
+          type: string
+        method:
+          type: string
+        url:
+          type: string
+        header:
+          type: object
+          additionalProperties:
+            type: string
+        body:
+          type: object
+          additionalProperties: true
+
     CodexKey:
       type: object
       properties:
@@ -703,35 +721,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/StatusOk'
 
-  /model-definitions/{channel}:
-    get:
-      summary: Get static model catalog by channel
-      parameters:
-        - in: path
-          name: channel
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: channel
-          schema:
-            type: string
+  /api-call:
+    post:
+      summary: Execute a provider-authenticated management usage probe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManagementApiCallRequest'
       responses:
         '200':
-          description: Model catalog
+          description: Upstream JSON payload
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  channel:
-                    type: string
-                  models:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ModelDefinition'
+                additionalProperties: true
         '400':
-          description: Unknown channel
+          description: Invalid probe request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Auth file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream request or response read failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Auth manager unavailable
           content:
             application/json:
               schema:

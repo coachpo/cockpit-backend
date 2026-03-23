@@ -128,7 +128,6 @@ func TestManagementRemovedRoutesAreNotMounted(t *testing.T) {
 		{name: "proxy url put", method: http.MethodPut, path: "/v0/management/proxy-url", body: `{"value":"http://127.0.0.1:9000"}`, contentType: "application/json"},
 		{name: "proxy url patch", method: http.MethodPatch, path: "/v0/management/proxy-url", body: `{"value":"http://127.0.0.1:9000"}`, contentType: "application/json"},
 		{name: "proxy url delete", method: http.MethodDelete, path: "/v0/management/proxy-url"},
-		{name: "api call", method: http.MethodPost, path: "/v0/management/api-call", body: `{"method":"GET","url":"https://example.com"}`, contentType: "application/json"},
 		{name: "quota preview get", method: http.MethodGet, path: "/v0/management/quota-exceeded/switch-preview-model"},
 		{name: "quota preview put", method: http.MethodPut, path: "/v0/management/quota-exceeded/switch-preview-model", body: `{"value":true}`, contentType: "application/json"},
 		{name: "quota preview patch", method: http.MethodPatch, path: "/v0/management/quota-exceeded/switch-preview-model", body: `{"value":true}`, contentType: "application/json"},
@@ -143,6 +142,7 @@ func TestManagementRemovedRoutesAreNotMounted(t *testing.T) {
 		{name: "oauth model alias put", method: http.MethodPut, path: "/v0/management/oauth-model-alias", body: `{}`, contentType: "application/json"},
 		{name: "oauth model alias patch", method: http.MethodPatch, path: "/v0/management/oauth-model-alias", body: `{"provider":"codex","aliases":[]}`, contentType: "application/json"},
 		{name: "oauth model alias delete", method: http.MethodDelete, path: "/v0/management/oauth-model-alias?provider=codex"},
+		{name: "model definitions", method: http.MethodGet, path: "/v0/management/model-definitions/codex"},
 	}
 
 	for _, route := range removedRoutes {
@@ -187,8 +187,8 @@ func TestManagementRetainedRoutesRemainMounted(t *testing.T) {
 		{name: "auth files download", method: http.MethodGet, path: "/v0/management/auth-files/download?name=upload.json"},
 		{name: "auth files status", method: http.MethodPatch, path: "/v0/management/auth-files/status", body: `{"name":"upload.json","disabled":true}`, contentType: "application/json"},
 		{name: "auth files fields", method: http.MethodPatch, path: "/v0/management/auth-files/fields", body: `{"name":"upload.json","note":"hello"}`, contentType: "application/json"},
+		{name: "api call", method: http.MethodPost, path: "/v0/management/api-call", body: `{"method":"GET","url":"https://example.com"}`, contentType: "application/json"},
 		{name: "auth file models", method: http.MethodGet, path: "/v0/management/auth-files/models"},
-		{name: "model definitions", method: http.MethodGet, path: "/v0/management/model-definitions/codex"},
 		{name: "oauth start", method: http.MethodGet, path: "/v0/management/codex-auth-url"},
 		{name: "oauth callback", method: http.MethodPost, path: "/v0/management/oauth-callback", body: `{"provider":"codex","state":"state-123","code":"auth-code"}`, contentType: "application/json"},
 		{name: "oauth status", method: http.MethodGet, path: "/v0/management/get-auth-status"},
