@@ -10,7 +10,7 @@ Private implementation tree. API routing, config/auth backends, model registry, 
 - `api/`: Gin server, route registration, websocket attachment, management routes.
 - `auth/`: private provider auth flows; current checked-in provider is Codex.
 - `browser/`, `constant/`, `interfaces/`, `misc/`: small support leaves for browser launch, provider constants, shared contracts, and focused helpers. Each has its own child `AGENTS.md` now.
-- `cmd/`: service startup helpers and cloud-deploy standby used by `cmd/cockpit`.
+- `cmd/`: service startup helpers and `cliproxy.NewBuilder` wiring used by `cmd/cockpit`.
 - `config/`: split config schema, load flow, and sanitization.
 - `logging/`: base logrus setup, Gin request logging, and request IDs.
 - `nacos/`: remote/static config and auth backends shared by bootstrap and watcher code.

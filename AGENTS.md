@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-03-22T22:25:39+02:00
-**Commit:** 96bf28e
+**Generated:** 2026-03-23T02:08:08+02:00
+**Commit:** 323ce85
 **Branch:** main
 
 ## OVERVIEW
@@ -30,13 +30,14 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Start the binary | `cmd/cockpit/main.go` | flags, `.env` load, cloud deploy detection, Nacos/static bootstrap, service handoff |
+| Start the binary | `cmd/cockpit/main.go` | flags, `.env` load, Nacos/static bootstrap, auth-dir resolution, and service handoff |
 | OpenAPI surface snapshot | `api/openapi.yaml`, `internal/api/openapi_surface_test.go` | trimmed API contract must stay aligned with the live management/router surface |
-| Service startup helpers | `internal/cmd/` | `StartService`, `StartServiceBackground`, and cloud standby |
+| Service startup helpers | `internal/cmd/` | `StartService`, `StartServiceBackground`, and `cliproxy.NewBuilder` wiring |
 | Built-in request access wiring | `internal/access/` | reconciles config API keys into the `sdk/access` manager |
 | Config/auth backends | `internal/nacos/` | remote Nacos stores plus static file-backed fallbacks |
 | HTTP routing + management | `internal/api/` | `server.go` plus `server_management.go`, keepalive, update, and route-option glue |
 | Management persistence APIs | `internal/api/handlers/management/` | config edits, auth files, Codex list endpoints, quota toggles, OAuth callbacks |
+| Provider auth implementation | `internal/auth/codex/` | Codex OAuth, local callback server, PKCE, JWT parsing, and credential filenames |
 | Request logging | `internal/logging/` | base logger, Gin middleware, request IDs |
 | Shared internal contracts | `internal/interfaces/` | handler and client-model interfaces reused across handlers and tests |
 | Small internal support leaves | `internal/browser/`, `internal/constant/`, `internal/misc/` | browser launch, provider constants, callback parsing, and focused helpers |
@@ -118,7 +119,7 @@ docker compose up -d --remove-orphans
 - Recent cleanup commits removed placeholder auth providers, `sdk/cliproxy/usage`, `sdk/translator/builtin`, and legacy executor helpers like `cloak_*` and `user_id_cache.go`.
 
 ## NOTES
-- `cmd/cockpit/main.go` loads `.env`, resolves Nacos vs static config/auth stores, configures logging, resolves auth dir, registers access providers, then waits for cloud config or starts the proxy service.
+- `cmd/cockpit/main.go` loads `.env`, resolves Nacos vs static config/auth stores, configures logging, resolves auth dir, registers access providers, then starts the proxy service.
 - `Dockerfile` builds `cmd/cockpit` directly; keep container build path aligned with the binary directory.
 - `docker-compose.yml` defaults to the GHCR backend image published by the root `docker-images.yml` workflow; override `COCKPIT_IMAGE` only when intentionally testing a different image.
 - `api/openapi.yaml` is intentionally narrower than older multi-provider surfaces; do not revive removed endpoints by copying stale docs.
