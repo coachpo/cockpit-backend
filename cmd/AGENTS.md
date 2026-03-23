@@ -6,7 +6,7 @@ Parent: `./AGENTS.md`
 Checked-in binaries only. This tree currently ships the `cockpit` main binary.
 
 ## WHERE TO LOOK
-- `cockpit/main.go`: flags, `.env` load, Nacos/static bootstrap, cloud standby, and service dispatch.
+- `cockpit/main.go`: flags, `.env` load, Nacos/static bootstrap, auth-dir resolution, and service dispatch.
 
 ## LOCAL CONVENTIONS
 - `cockpit/main.go` may orchestrate startup, but reusable behavior should move into `internal/` or `sdk/` quickly.
