@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-03-23T02:08:08+02:00
-**Commit:** 323ce85
+**Generated:** 2026-03-23T15:48:02+02:00
+**Commit:** b0dbdde
 **Branch:** main
 
 ## OVERVIEW
@@ -18,7 +18,7 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 |- internal/            # private runtime, management, logging, utility, watcher, and relay code
 |- sdk/                 # embeddable public surface
 |- test/                # cross-subsystem matrices
-|- temp/                # tracked runtime output under `temp/stats/` and `temp/qa-auths/`
+|- temp/                # tracked runtime and QA artifacts under `temp/stats/`, `temp/qa-auths/`, and top-level bootstrap files
 |- config.example.yaml  # config-key inventory
 |- .env.example         # env var starter file
 |- Dockerfile           # container build for the cockpit binary
@@ -126,4 +126,4 @@ docker compose up -d --remove-orphans
 - `test/thinking_conversion_test.go` is intentionally large. Extend the existing matrix instead of starting parallel styles.
 - `test/nacos_integration_test.go` is a live smoke test gated by `COCKPIT_NACOS_SMOKE=1` plus Nacos credentials.
 - `internal/wsrelay/` is wired from `sdk/cliproxy/service.go`; keep relay work scoped there instead of reviving removed API scaffolding.
-- `temp/stats/` and `temp/qa-auths/` are tracked runtime output, not source.
+- `temp/stats/`, `temp/qa-auths/`, `temp/qa-config.yaml`, `temp/auth-credentials-upload.json`, and `temp/cockpit-validation` are tracked runtime/QA artifacts, not source.
