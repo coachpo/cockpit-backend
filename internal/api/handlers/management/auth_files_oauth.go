@@ -4,126 +4,236 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/coachpo/cockpit-backend/internal/auth/codex"
+	proxyconfig "github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/misc"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
 )
 
-const codexCallbackPort = 1455
-
-type callbackForwarder struct {
-	provider string
-	server   *http.Server
-	done     chan struct{}
+type codexOAuthClient interface {
+	GenerateAuthURL(state string, pkceCodes *codex.PKCECodes) (string, error)
+	GenerateAuthURLWithRedirect(state, redirectURI string, pkceCodes *codex.PKCECodes) (string, error)
+	ExchangeCodeForTokens(ctx context.Context, code string, pkceCodes *codex.PKCECodes) (*codex.CodexAuthBundle, error)
+	ExchangeCodeForTokensWithRedirect(ctx context.Context, code, redirectURI string, pkceCodes *codex.PKCECodes) (*codex.CodexAuthBundle, error)
 }
 
-var (
-	callbackForwardersMu sync.Mutex
-	callbackForwarders   = make(map[int]*callbackForwarder)
-)
+var newCodexOAuthClient = func(cfg *proxyconfig.Config) codexOAuthClient {
+	return codex.NewCodexAuth(cfg)
+}
 
-func isWebUIRequest(c *gin.Context) bool {
-	raw := strings.TrimSpace(c.Query("is_webui"))
-	if raw == "" {
+type oauthSessionCreateRequest struct {
+	Provider       string `json:"provider"`
+	CallbackOrigin string `json:"callback_origin"`
+}
+
+func buildFrontendCallbackURL(callbackOrigin string) (string, error) {
+	callbackOrigin = strings.TrimSpace(callbackOrigin)
+	if callbackOrigin == "" {
+		return "", fmt.Errorf("callback_origin is required")
+	}
+	parsed, err := url.Parse(callbackOrigin)
+	if err != nil || strings.TrimSpace(parsed.Scheme) == "" || strings.TrimSpace(parsed.Host) == "" {
+		return "", fmt.Errorf("invalid callback_origin")
+	}
+	if !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
+		return "", fmt.Errorf("invalid callback_origin")
+	}
+	parsed.Path = "/codex/callback"
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), nil
+}
+
+func firstForwardedValue(value string) string {
+	if idx := strings.Index(value, ","); idx >= 0 {
+		value = value[:idx]
+	}
+	return strings.TrimSpace(value)
+}
+
+func requestPublicOrigin(c *gin.Context) (*url.URL, error) {
+	if c == nil || c.Request == nil {
+		return nil, fmt.Errorf("request is unavailable")
+	}
+
+	scheme := strings.ToLower(firstForwardedValue(c.GetHeader("X-Forwarded-Proto")))
+	if scheme == "" {
+		if c.Request.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+
+	host := firstForwardedValue(c.GetHeader("X-Forwarded-Host"))
+	if host == "" {
+		host = strings.TrimSpace(c.Request.Host)
+	}
+	if host == "" {
+		return nil, fmt.Errorf("request host is unavailable")
+	}
+
+	return url.Parse(scheme + "://" + host)
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
 		return false
 	}
-	switch strings.ToLower(raw) {
-	case "1", "true", "yes", "on":
+	if host == "localhost" {
 		return true
-	default:
-		return false
 	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
-func startCallbackForwarder(port int, provider, targetBase string) (*callbackForwarder, error) {
-	callbackForwardersMu.Lock()
-	prev := callbackForwarders[port]
-	if prev != nil {
-		delete(callbackForwarders, port)
+func normalizeOriginKey(origin *url.URL) string {
+	if origin == nil {
+		return ""
 	}
-	callbackForwardersMu.Unlock()
-	if prev != nil {
-		stopForwarderInstance(port, prev)
+	host := strings.ToLower(origin.Hostname())
+	if host == "" {
+		return ""
 	}
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	ln, err := net.Listen("tcp", addr)
+	port := origin.Port()
+	switch {
+	case strings.EqualFold(origin.Scheme, "http") && port == "80":
+		port = ""
+	case strings.EqualFold(origin.Scheme, "https") && port == "443":
+		port = ""
+	}
+	if port != "" {
+		return strings.ToLower(origin.Scheme) + "://" + net.JoinHostPort(host, port)
+	}
+	return strings.ToLower(origin.Scheme) + "://" + host
+}
+
+func validateFrontendCallbackOrigin(c *gin.Context, callbackURL string) error {
+	requestOrigin, err := requestPublicOrigin(c)
 	if err != nil {
-		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
+		return err
 	}
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		target := targetBase
-		if raw := r.URL.RawQuery; raw != "" {
-			if strings.Contains(target, "?") {
-				target = target + "&" + raw
-			} else {
-				target = target + "?" + raw
-			}
-		}
-		w.Header().Set("Cache-Control", "no-store")
-		http.Redirect(w, r, target, http.StatusFound)
-	})
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second}
-	done := make(chan struct{})
-	go func() {
-		if errServe := srv.Serve(ln); errServe != nil && !errors.Is(errServe, http.ErrServerClosed) {
-			log.WithError(errServe).Warnf("callback forwarder for %s stopped unexpectedly", provider)
-		}
-		close(done)
-	}()
-	forwarder := &callbackForwarder{provider: provider, server: srv, done: done}
-	callbackForwardersMu.Lock()
-	callbackForwarders[port] = forwarder
-	callbackForwardersMu.Unlock()
-	log.Infof("callback forwarder for %s listening on %s", provider, addr)
-	return forwarder, nil
+	callbackOrigin, err := url.Parse(strings.TrimSpace(callbackURL))
+	if err != nil {
+		return fmt.Errorf("invalid callback_origin")
+	}
+	if normalizeOriginKey(callbackOrigin) == normalizeOriginKey(requestOrigin) {
+		return nil
+	}
+	if isLoopbackHost(callbackOrigin.Hostname()) && isLoopbackHost(requestOrigin.Hostname()) {
+		return nil
+	}
+	return fmt.Errorf("callback_origin must match the current frontend origin")
 }
 
-func stopCallbackForwarderInstance(port int, forwarder *callbackForwarder) {
-	if forwarder == nil {
+func oauthSessionStateParam(c *gin.Context) (string, bool) {
+	state := strings.TrimSpace(c.Param("state"))
+	if state == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "state is required"})
+		return "", false
+	}
+	if err := ValidateOAuthState(state); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid state"})
+		return "", false
+	}
+	return state, true
+}
+
+func (h *Handler) CreateOAuthSession(c *gin.Context) {
+	if h.authStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "auth store unavailable"})
 		return
 	}
-	callbackForwardersMu.Lock()
-	if current := callbackForwarders[port]; current == forwarder {
-		delete(callbackForwarders, port)
-	}
-	callbackForwardersMu.Unlock()
-	stopForwarderInstance(port, forwarder)
-}
 
-func stopForwarderInstance(port int, forwarder *callbackForwarder) {
-	if forwarder == nil || forwarder.server == nil {
+	var req oauthSessionCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := forwarder.server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.WithError(err).Warnf("failed to shut down callback forwarder on port %d", port)
+
+	provider, err := NormalizeOAuthProvider(req.Provider)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported provider"})
+		return
 	}
-	select {
-	case <-forwarder.done:
-	case <-time.After(2 * time.Second):
+	frontendCallbackURL, err := buildFrontendCallbackURL(req.CallbackOrigin)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
-	log.Infof("callback forwarder on port %d stopped", port)
+	if err := validateFrontendCallbackOrigin(c, frontendCallbackURL); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	pkceCodes, err := codex.GeneratePKCECodes()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate PKCE codes"})
+		return
+	}
+	state, err := misc.GenerateRandomState()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate state parameter"})
+		return
+	}
+
+	authClient := newCodexOAuthClient(h.cfg)
+	authURL, err := authClient.GenerateAuthURLWithRedirect(state, frontendCallbackURL, pkceCodes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate authorization url"})
+		return
+	}
+	if err := RegisterOAuthSessionWithRedirect(state, provider, frontendCallbackURL, pkceCodes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register oauth session"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "url": authURL, "state": state})
 }
 
-func (h *Handler) managementCallbackURL(path string) (string, error) {
-	if h == nil || h.cfg == nil || h.cfg.Port <= 0 {
-		return "", fmt.Errorf("server port is not configured")
+func (h *Handler) GetOAuthSessionStatus(c *gin.Context) {
+	state, ok := oauthSessionStateParam(c)
+	if !ok {
+		return
 	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
+	session, err := LoadOAuthSession(state)
+	if err != nil {
+		switch {
+		case err == errOAuthSessionNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "oauth session not found"})
+		case err == errOAuthSessionExpired:
+			c.JSON(http.StatusGone, gin.H{"error": "oauth session expired"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
+		}
+		return
 	}
-	return fmt.Sprintf("http://127.0.0.1:%d%s", h.cfg.Port, path), nil
+
+	status := strings.TrimSpace(session.Status)
+	if status == "" {
+		status = oauthStatusPending
+	}
+	response := gin.H{
+		"status":   status,
+		"provider": session.Provider,
+		"state":    state,
+	}
+	if session.Error != "" {
+		response["error"] = session.Error
+	}
+	if session.AuthFile != "" {
+		response["auth_file"] = session.AuthFile
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func buildCodexOAuthRecord(bundle *codex.CodexAuthBundle) *coreauth.Auth {
@@ -221,140 +331,6 @@ func (h *Handler) saveTokenRecord(ctx context.Context, record *coreauth.Auth) (s
 		}
 	}
 	return h.authStore.Save(ctx, record)
-}
-
-func (h *Handler) RequestCodexToken(c *gin.Context) {
-	if h.authStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "auth store unavailable"})
-		return
-	}
-	ctx := PopulateAuthContext(context.Background(), c)
-	pkceCodes, err := codex.GeneratePKCECodes()
-	if err != nil {
-		log.Errorf("Failed to generate PKCE codes: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate PKCE codes"})
-		return
-	}
-	state, err := misc.GenerateRandomState()
-	if err != nil {
-		log.Errorf("Failed to generate state parameter: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate state parameter"})
-		return
-	}
-	openaiAuth := codex.NewCodexAuth(h.cfg)
-	authURL, err := openaiAuth.GenerateAuthURL(state, pkceCodes)
-	if err != nil {
-		log.Errorf("Failed to generate authorization URL: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate authorization url"})
-		return
-	}
-	RegisterOAuthSession(state, "codex")
-	isWebUI := isWebUIRequest(c)
-	var forwarder *callbackForwarder
-	if isWebUI {
-		targetURL, errTarget := h.managementCallbackURL("/codex/callback")
-		if errTarget != nil {
-			log.WithError(errTarget).Error("failed to compute codex callback target")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "callback server unavailable"})
-			return
-		}
-		if forwarder, err = startCallbackForwarder(codexCallbackPort, "codex", targetURL); err != nil {
-			log.WithError(err).Error("failed to start codex callback forwarder")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start callback server"})
-			return
-		}
-	}
-	go h.completeCodexOAuthFlow(ctx, state, pkceCodes, openaiAuth, isWebUI, forwarder)
-	c.JSON(200, gin.H{"status": "ok", "url": authURL, "state": state})
-}
-
-func (h *Handler) completeCodexOAuthFlow(ctx context.Context, state string, pkceCodes *codex.PKCECodes, openaiAuth *codex.CodexAuth, isWebUI bool, forwarder *callbackForwarder) {
-	if isWebUI {
-		defer stopCallbackForwarderInstance(codexCallbackPort, forwarder)
-	}
-	deadline := time.Now().Add(5 * time.Minute)
-	var code string
-	for {
-		if !IsOAuthSessionPending(state, "codex") {
-			return
-		}
-		if time.Now().After(deadline) {
-			authErr := codex.NewAuthenticationError(codex.ErrCallbackTimeout, fmt.Errorf("timeout waiting for OAuth callback"))
-			log.Error(codex.GetUserFriendlyMessage(authErr))
-			SetOAuthSessionError(state, "Timeout waiting for OAuth callback")
-			return
-		}
-		payload, ready, errConsume := consumeOAuthCallback(state, "codex")
-		if errConsume != nil {
-			SetOAuthSessionError(state, "OAuth callback unavailable")
-			return
-		}
-		if ready {
-			if errStr := payload.Error; errStr != "" {
-				oauthErr := codex.NewOAuthError(errStr, "", http.StatusBadRequest)
-				log.Error(codex.GetUserFriendlyMessage(oauthErr))
-				SetOAuthSessionError(state, "Bad Request")
-				return
-			}
-			if payload.State != state {
-				authErr := codex.NewAuthenticationError(codex.ErrInvalidState, fmt.Errorf("expected %s, got %s", state, payload.State))
-				SetOAuthSessionError(state, "State code error")
-				log.Error(codex.GetUserFriendlyMessage(authErr))
-				return
-			}
-			code = payload.Code
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	bundle, errExchange := openaiAuth.ExchangeCodeForTokens(ctx, code, pkceCodes)
-	if errExchange != nil {
-		authErr := codex.NewAuthenticationError(codex.ErrCodeExchangeFailed, errExchange)
-		SetOAuthSessionError(state, "Failed to exchange authorization code for tokens")
-		log.Errorf("Failed to exchange authorization code for tokens: %v", authErr)
-		return
-	}
-	record := buildCodexOAuthRecord(bundle)
-	savedPath, errSave := h.saveTokenRecord(ctx, record)
-	if errSave != nil {
-		SetOAuthSessionError(state, "Failed to save authentication tokens")
-		log.Errorf("Failed to save authentication tokens: %v", errSave)
-		return
-	}
-	if errUpsert := h.upsertManagedAuth(ctx, record); errUpsert != nil {
-		SetOAuthSessionError(state, "Failed to activate authentication tokens")
-		log.Errorf("Failed to update runtime auth manager: %v", errUpsert)
-		return
-	}
-	fmt.Printf("Authentication successful! Token saved to %s\n", savedPath)
-	if bundle.APIKey != "" {
-		fmt.Println("API key obtained and saved")
-	}
-	fmt.Println("You can now use Codex services through this CLI")
-	CompleteOAuthSession(state)
-	CompleteOAuthSessionsByProvider("codex")
-}
-
-func (h *Handler) GetAuthStatus(c *gin.Context) {
-	state := strings.TrimSpace(c.Query("state"))
-	if state == "" {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		return
-	}
-	if err := ValidateOAuthState(state); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid state"})
-		return
-	}
-	_, status, ok := GetOAuthSession(state)
-	if !ok {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		return
-	}
-	if status != "" {
-		c.JSON(http.StatusOK, gin.H{"status": "error", "error": status})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "wait"})
 }
 
 func PopulateAuthContext(ctx context.Context, c *gin.Context) context.Context {

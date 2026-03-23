@@ -11,11 +11,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ManagementTokenRequester exposes a limited subset of management endpoints for requesting tokens.
+// ManagementTokenRequester exposes a limited subset of management endpoints for OAuth session setup and completion.
 type ManagementTokenRequester interface {
-	RequestCodexToken(*gin.Context)
-	GetAuthStatus(c *gin.Context)
-	PostOAuthCallback(c *gin.Context)
+	CreateOAuthSession(*gin.Context)
+	GetOAuthSessionStatus(*gin.Context)
+	PostOAuthSessionCallback(*gin.Context)
 }
 
 type managementTokenRequester struct {
@@ -29,14 +29,14 @@ func NewManagementTokenRequester(cfg *config.Config, manager *coreauth.Manager) 
 	}
 }
 
-func (m *managementTokenRequester) RequestCodexToken(c *gin.Context) {
-	m.handler.RequestCodexToken(c)
+func (m *managementTokenRequester) CreateOAuthSession(c *gin.Context) {
+	m.handler.CreateOAuthSession(c)
 }
 
-func (m *managementTokenRequester) GetAuthStatus(c *gin.Context) {
-	m.handler.GetAuthStatus(c)
+func (m *managementTokenRequester) GetOAuthSessionStatus(c *gin.Context) {
+	m.handler.GetOAuthSessionStatus(c)
 }
 
-func (m *managementTokenRequester) PostOAuthCallback(c *gin.Context) {
-	m.handler.PostOAuthCallback(c)
+func (m *managementTokenRequester) PostOAuthSessionCallback(c *gin.Context) {
+	m.handler.PostOAuthSessionCallback(c)
 }

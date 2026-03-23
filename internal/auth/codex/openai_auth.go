@@ -46,14 +46,21 @@ func NewCodexAuth(cfg *config.Config) *CodexAuth {
 // It constructs the URL with the necessary parameters, including the client ID,
 // response type, redirect URI, scopes, and PKCE challenge.
 func (o *CodexAuth) GenerateAuthURL(state string, pkceCodes *PKCECodes) (string, error) {
+	return o.GenerateAuthURLWithRedirect(state, RedirectURI, pkceCodes)
+}
+
+func (o *CodexAuth) GenerateAuthURLWithRedirect(state, redirectURI string, pkceCodes *PKCECodes) (string, error) {
 	if pkceCodes == nil {
 		return "", fmt.Errorf("PKCE codes are required")
+	}
+	if strings.TrimSpace(redirectURI) == "" {
+		return "", fmt.Errorf("redirect URI is required")
 	}
 
 	params := url.Values{
 		"client_id":                  {ClientID},
 		"response_type":              {"code"},
-		"redirect_uri":               {RedirectURI},
+		"redirect_uri":               {strings.TrimSpace(redirectURI)},
 		"scope":                      {"openid email profile offline_access"},
 		"state":                      {state},
 		"code_challenge":             {pkceCodes.CodeChallenge},

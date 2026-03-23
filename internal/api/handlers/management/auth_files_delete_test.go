@@ -2,9 +2,9 @@ package management
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,8 +51,9 @@ func TestDeleteAuthFile_UsesInjectedStoreIDWithoutFilesystemMutation(t *testing.
 
 	deleteRec := httptest.NewRecorder()
 	deleteCtx, _ := gin.CreateTestContext(deleteRec)
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/v0/management/auth-files?name="+url.QueryEscape(fileName), nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v0/management/auth-files/"+fileName, nil)
 	deleteCtx.Request = deleteReq
+	deleteCtx.Params = gin.Params{{Key: "name", Value: fileName}}
 	h.DeleteAuthFile(deleteCtx)
 
 	if deleteRec.Code != http.StatusOK {
@@ -100,9 +101,10 @@ func TestDownloadAuthFile_UsesStoreReadByNameWithoutDisk(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodGet, "/v0/management/auth-files/download?name=download.json", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v0/management/auth-files/download.json/content", nil)
 	ctx.Request = req
-	h.DownloadAuthFile(ctx)
+	ctx.Params = gin.Params{{Key: "name", Value: "download.json"}}
+	h.GetAuthFileContent(ctx)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected download status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
@@ -140,10 +142,25 @@ func TestListAuthFiles_UsesStoreMetadataWhenManagerUnavailable(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected list status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "store-list.json") || !strings.Contains(body, "store-list@example.com") || !strings.Contains(body, `"priority":7`) {
-		t.Fatalf("expected store metadata in list response, got %s", body)
+	var payload struct {
+		Items []struct {
+			Name           string `json:"name"`
+			Email          string `json:"email"`
+			Priority       int    `json:"priority"`
+			UsageAvailable bool   `json:"usage_available"`
+		} `json:"items"`
 	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode auth files response: %v", err)
+	}
+	if len(payload.Items) != 1 {
+		t.Fatalf("expected one store-backed auth file, got %d (%s)", len(payload.Items), rec.Body.String())
+	}
+	item := payload.Items[0]
+	if item.Name != "store-list.json" || item.Email != "store-list@example.com" || item.Priority != 7 {
+		t.Fatalf("expected store metadata in list response, got %#v", item)
+	}
+	body := rec.Body.String()
 	if strings.Contains(body, "hello") || strings.Contains(body, "team-a") {
 		t.Fatalf("did not expect prefix/note in list response, got %s", body)
 	}
@@ -179,8 +196,9 @@ func TestDeleteAuthFile_StaticModeRejectsBeforeFilesystemMutation(t *testing.T) 
 
 	deleteRec := httptest.NewRecorder()
 	deleteCtx, _ := gin.CreateTestContext(deleteRec)
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/v0/management/auth-files?name="+url.QueryEscape(fileName), nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v0/management/auth-files/"+fileName, nil)
 	deleteCtx.Request = deleteReq
+	deleteCtx.Params = gin.Params{{Key: "name", Value: fileName}}
 	h.DeleteAuthFile(deleteCtx)
 
 	if deleteRec.Code != http.StatusOK {
@@ -195,57 +213,5 @@ func TestDeleteAuthFile_StaticModeRejectsBeforeFilesystemMutation(t *testing.T) 
 	}
 	if !updated.Disabled || updated.Status != coreauth.StatusDisabled {
 		t.Fatalf("expected auth to be disabled after delete, got %+v", updated)
-	}
-}
-
-func TestDeleteAuthFile_AllSkipsConfigBackedManagerEntries(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "")
-	gin.SetMode(gin.TestMode)
-
-	authDir := t.TempDir()
-	manager := coreauth.NewManager(nil, nil, nil)
-	if _, errRegister := manager.Register(context.Background(), &coreauth.Auth{
-		ID:         "config-auth",
-		Provider:   "codex",
-		Status:     coreauth.StatusActive,
-		Attributes: map[string]string{"source": "config:codex"},
-		Metadata:   map[string]any{"type": "codex"},
-	}); errRegister != nil {
-		t.Fatalf("failed to register config-backed auth: %v", errRegister)
-	}
-	if _, errRegister := manager.Register(context.Background(), &coreauth.Auth{
-		ID:         "managed-auth",
-		FileName:   "managed.json",
-		Provider:   "codex",
-		Status:     coreauth.StatusActive,
-		Attributes: map[string]string{managedStoreAttribute: "true"},
-		Metadata:   map[string]any{"type": "codex"},
-	}); errRegister != nil {
-		t.Fatalf("failed to register managed auth: %v", errRegister)
-	}
-
-	store := &recordingAuthStore{}
-	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: authDir}, manager)
-	h.authStore = store
-
-	rec := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodDelete, "/v0/management/auth-files?all=true", nil)
-	ctx.Request = req
-	h.DeleteAuthFile(ctx)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected delete-all status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
-	}
-	if len(store.deleted) != 1 || store.deleted[0] != "managed-auth" {
-		t.Fatalf("expected only managed auth to be deleted, got %#v", store.deleted)
-	}
-	configAuth, ok := manager.GetByID("config-auth")
-	if !ok || configAuth.Disabled {
-		t.Fatalf("expected config-backed auth to remain active, got %+v (ok=%v)", configAuth, ok)
-	}
-	managedAuth, ok := manager.GetByID("managed-auth")
-	if !ok || !managedAuth.Disabled {
-		t.Fatalf("expected managed auth to be disabled after delete-all, got %+v (ok=%v)", managedAuth, ok)
 	}
 }

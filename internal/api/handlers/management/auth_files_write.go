@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -14,6 +13,16 @@ import (
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/gin-gonic/gin"
 )
+
+type createAuthFileRequest struct {
+	Name    string         `json:"name"`
+	Content map[string]any `json:"content"`
+}
+
+type patchAuthFileRequest struct {
+	Disabled *bool `json:"disabled"`
+	Priority *int  `json:"priority"`
+}
 
 func (h *Handler) buildManagedAuthRecord(name string, data []byte) (*coreauth.Auth, error) {
 	name = strings.TrimSpace(filepath.Base(name))
@@ -107,8 +116,7 @@ func (h *Handler) upsertManagedAuth(ctx context.Context, auth *coreauth.Auth) er
 	return err
 }
 
-// Upload auth file as raw JSON with ?name=
-func (h *Handler) UploadAuthFile(c *gin.Context) {
+func (h *Handler) CreateAuthFile(c *gin.Context) {
 	if h.authManager == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "core auth manager unavailable"})
 		return
@@ -117,8 +125,15 @@ func (h *Handler) UploadAuthFile(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "auth store unavailable"})
 		return
 	}
+
+	var req createAuthFileRequest
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Name) == "" || req.Content == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
 	ctx := c.Request.Context()
-	name := c.Query("name")
+	name := strings.TrimSpace(req.Name)
 	if name == "" || strings.ContainsRune(name, '/') || strings.ContainsRune(name, '\\') {
 		c.JSON(400, gin.H{"error": "invalid name"})
 		return
@@ -127,9 +142,9 @@ func (h *Handler) UploadAuthFile(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "name must end with .json"})
 		return
 	}
-	data, err := io.ReadAll(c.Request.Body)
+	data, err := json.Marshal(req.Content)
 	if err != nil {
-		c.JSON(400, gin.H{"error": "failed to read body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content must be valid json"})
 		return
 	}
 
@@ -146,10 +161,9 @@ func (h *Handler) UploadAuthFile(c *gin.Context) {
 		c.JSON(500, gin.H{"error": errUpsert.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"status": "ok"})
+	c.JSON(200, gin.H{"status": "ok", "name": name})
 }
 
-// Delete auth files: single by name or all
 func (h *Handler) DeleteAuthFile(c *gin.Context) {
 	if h.authManager == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "core auth manager unavailable"})
@@ -160,25 +174,8 @@ func (h *Handler) DeleteAuthFile(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	if all := c.Query("all"); all == "true" || all == "1" || all == "*" {
-		deleted := 0
-		for _, auth := range h.authManager.List() {
-			if auth == nil || auth.ID == "" || isRuntimeOnlyAuth(auth) || !isManagedStoredAuth(auth) {
-				continue
-			}
-			if errDelete := h.authStore.Delete(ctx, auth.ID); errDelete != nil {
-				c.JSON(500, gin.H{"error": errDelete.Error()})
-				return
-			}
-			deleted++
-			h.disableAuth(ctx, auth.ID)
-		}
-		c.JSON(200, gin.H{"status": "ok", "deleted": deleted})
-		return
-	}
-	name := c.Query("name")
-	if name == "" || strings.ContainsRune(name, '/') || strings.ContainsRune(name, '\\') {
-		c.JSON(400, gin.H{"error": "invalid name"})
+	name, ok := authFileNameParam(c)
+	if !ok {
 		return
 	}
 
@@ -192,11 +189,14 @@ func (h *Handler) DeleteAuthFile(c *gin.Context) {
 		return
 	}
 	h.disableAuth(ctx, targetAuth.ID)
-	c.JSON(200, gin.H{"status": "ok"})
+	resolvedName := strings.TrimSpace(targetAuth.FileName)
+	if resolvedName == "" {
+		resolvedName = name
+	}
+	c.JSON(200, gin.H{"status": "ok", "name": resolvedName})
 }
 
-// PatchAuthFileStatus toggles the disabled state of an auth file
-func (h *Handler) PatchAuthFileStatus(c *gin.Context) {
+func (h *Handler) PatchAuthFile(c *gin.Context) {
 	if h.authManager == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "core auth manager unavailable"})
 		return
@@ -206,77 +206,14 @@ func (h *Handler) PatchAuthFileStatus(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Name     string `json:"name"`
-		Disabled *bool  `json:"disabled"`
+	name, ok := authFileNameParam(c)
+	if !ok {
+		return
 	}
+
+	var req patchAuthFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
-		return
-	}
-	if req.Disabled == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "disabled is required"})
-		return
-	}
-
-	ctx := c.Request.Context()
-
-	targetAuth := h.findManagedAuth(name)
-	if targetAuth == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "auth file not found"})
-		return
-	}
-
-	targetAuth.Disabled = *req.Disabled
-	if *req.Disabled {
-		targetAuth.Status = coreauth.StatusDisabled
-		targetAuth.StatusMessage = "disabled via management API"
-	} else {
-		targetAuth.Status = coreauth.StatusActive
-		targetAuth.StatusMessage = ""
-	}
-	targetAuth.UpdatedAt = time.Now()
-
-	if _, err := h.authStore.Save(ctx, targetAuth); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if err := h.upsertManagedAuth(ctx, targetAuth); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update auth: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "disabled": *req.Disabled})
-}
-
-func (h *Handler) PatchAuthFileFields(c *gin.Context) {
-	if h.authManager == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "core auth manager unavailable"})
-		return
-	}
-	if h.authStore == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "auth store unavailable"})
-		return
-	}
-
-	var req struct {
-		Name     string `json:"name"`
-		Priority *int   `json:"priority"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
 		return
 	}
 
@@ -289,6 +226,17 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 	}
 
 	changed := false
+	if req.Disabled != nil {
+		targetAuth.Disabled = *req.Disabled
+		if *req.Disabled {
+			targetAuth.Status = coreauth.StatusDisabled
+			targetAuth.StatusMessage = "disabled via management API"
+		} else {
+			targetAuth.Status = coreauth.StatusActive
+			targetAuth.StatusMessage = ""
+		}
+		changed = true
+	}
 	if req.Priority != nil {
 		if targetAuth.Metadata == nil {
 			targetAuth.Metadata = make(map[string]any)
@@ -296,14 +244,8 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 		if targetAuth.Attributes == nil {
 			targetAuth.Attributes = make(map[string]string)
 		}
-
-		if *req.Priority == 0 {
-			delete(targetAuth.Metadata, "priority")
-			delete(targetAuth.Attributes, "priority")
-		} else {
-			targetAuth.Metadata["priority"] = *req.Priority
-			targetAuth.Attributes["priority"] = strconv.Itoa(*req.Priority)
-		}
+		targetAuth.Metadata["priority"] = *req.Priority
+		targetAuth.Attributes["priority"] = strconv.Itoa(*req.Priority)
 		changed = true
 	}
 

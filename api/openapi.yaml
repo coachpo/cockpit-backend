@@ -1,21 +1,17 @@
 openapi: 3.0.3
 info:
   title: Cockpit Management API
-  version: 6.0.0
-  description: Management API for Cockpit v6 proxy and SDK.
+  version: 7.0.0
+  description: Resource-oriented management API for Cockpit.
 servers:
   - url: /v0/management
     description: Local management server
 
 components:
   schemas:
-    Config:
-      type: object
-      description: Full configuration object.
-      additionalProperties: true
-
     StatusOk:
       type: object
+      required: [status]
       properties:
         status:
           type: string
@@ -23,44 +19,41 @@ components:
 
     ErrorResponse:
       type: object
+      required: [error]
       properties:
         error:
           type: string
         message:
           type: string
 
-    ManagementApiCallRequest:
+    RuntimeSettings:
       type: object
-      required: [authIndex, method, url]
+      required:
+        - ws-auth
+        - request-retry
+        - max-retry-interval
+        - routing-strategy
+        - switch-project
       properties:
-        authIndex:
-          type: string
-        method:
-          type: string
-        url:
-          type: string
-        header:
-          type: object
-          additionalProperties:
-            type: string
-        body:
-          type: object
-          additionalProperties: true
-
-    CodexKey:
-      type: object
-      properties:
-        api-key:
-          type: string
-        priority:
-          type: integer
-        base-url:
-          type: string
-        websockets:
+        ws-auth:
           type: boolean
-        headers:
-          type: object
-          additionalProperties:
+        request-retry:
+          type: integer
+        max-retry-interval:
+          type: integer
+        routing-strategy:
+          type: string
+          enum: [round-robin, fill-first]
+        switch-project:
+          type: boolean
+
+    APIKeysEnvelope:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
             type: string
 
     AuthFile:
@@ -112,231 +105,143 @@ components:
         usage:
           type: object
           additionalProperties: true
-        usage_probe:
-          $ref: '#/components/schemas/ManagementApiCallRequest'
+        usage_available:
+          type: boolean
 
-    ModelDefinition:
+    AuthFilesEnvelope:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthFile'
+
+    CreateAuthFileRequest:
+      type: object
+      required: [name, content]
+      properties:
+        name:
+          type: string
+        content:
+          type: object
+          additionalProperties: true
+
+    AuthFileCreateResponse:
+      type: object
+      required: [status, name]
+      properties:
+        status:
+          type: string
+          example: ok
+        name:
+          type: string
+
+    AuthFilePatchRequest:
       type: object
       properties:
-        id:
+        disabled:
+          type: boolean
+        priority:
+          type: integer
+          nullable: true
+
+    AuthFileDeleteResponse:
+      type: object
+      required: [status, name]
+      properties:
+        status:
           type: string
-        display_name:
+          example: ok
+        name:
           type: string
-        type:
+
+    OAuthSessionCreateRequest:
+      type: object
+      required: [provider, callback_origin]
+      properties:
+        provider:
           type: string
-        owned_by:
+          enum: [codex]
+        callback_origin:
           type: string
+          format: uri
+
+    OAuthSessionCreateResponse:
+      type: object
+      required: [status, state, url]
+      properties:
+        status:
+          type: string
+          example: ok
+        state:
+          type: string
+        url:
+          type: string
+          format: uri
+
+    OAuthSessionStatusResponse:
+      type: object
+      required: [status, provider, state]
+      properties:
+        status:
+          type: string
+          enum: [pending, complete, error]
+        provider:
+          type: string
+          enum: [codex]
+        state:
+          type: string
+        error:
+          type: string
+        auth_file:
+          type: string
+
+    OAuthSessionCallbackRequest:
+      type: object
+      required: [provider]
+      properties:
+        provider:
+          type: string
+          enum: [codex]
+        code:
+          type: string
+        error:
+          type: string
+        error_description:
+          type: string
+        redirect_url:
+          type: string
+          format: uri
+
 paths:
-  /ws-auth:
+  /runtime-settings:
     get:
-      summary: Get websocket auth toggle
+      summary: Get runtime management settings
       responses:
         '200':
-          description: Websocket auth status
+          description: Current runtime settings
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  ws-auth:
-                    type: boolean
+                $ref: '#/components/schemas/RuntimeSettings'
     put:
-      summary: Set websocket auth
+      summary: Replace runtime management settings
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                value:
-                  type: boolean
+              $ref: '#/components/schemas/RuntimeSettings'
       responses:
         '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-    patch:
-      summary: Set websocket auth (alias)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                value:
-                  type: boolean
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-
-  /request-retry:
-    get:
-      summary: Get retry count
-      responses:
-        '200':
-          description: Retry count
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  request-retry:
-                    type: integer
-    put:
-      summary: Set retry count
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                value:
-                  type: integer
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-    patch:
-      summary: Set retry count (alias)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                value:
-                  type: integer
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-
-  /max-retry-interval:
-    get:
-      summary: Get max retry interval
-      responses:
-        '200':
-          description: Max retry interval in seconds
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  max-retry-interval:
-                    type: integer
-    put:
-      summary: Set max retry interval
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                value:
-                  type: integer
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-    patch:
-      summary: Set max retry interval (alias)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                value:
-                  type: integer
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-
-  /routing/strategy:
-    get:
-      summary: Get routing strategy
-      responses:
-        '200':
-          description: Routing strategy
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  strategy:
-                    type: string
-                    enum: [round-robin, fill-first]
-    put:
-      summary: Set routing strategy
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                value:
-                  type: string
-                  enum: [round-robin, fill-first]
-      responses:
-        '200':
-          description: Status OK
+          description: Settings updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/StatusOk'
         '400':
-          description: Invalid strategy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-    patch:
-      summary: Set routing strategy (alias)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                value:
-                  type: string
-                  enum: [round-robin, fill-first]
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-        '400':
-          description: Invalid strategy
+          description: Invalid settings payload
           content:
             application/json:
               schema:
@@ -344,328 +249,74 @@ paths:
 
   /api-keys:
     get:
-      summary: Get API keys
+      summary: Get configured downstream API keys
       responses:
         '200':
-          description: List of API keys
+          description: API key collection
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  api-keys:
-                    type: array
-                    items:
-                      type: string
+                $ref: '#/components/schemas/APIKeysEnvelope'
     put:
-      summary: Replace all API keys
+      summary: Replace configured downstream API keys
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              oneOf:
-                - type: array
-                  items:
-                    type: string
-                - type: object
-                  properties:
-                    items:
-                      type: array
-                      items:
-                        type: string
+              $ref: '#/components/schemas/APIKeysEnvelope'
       responses:
         '200':
-          description: Status OK
+          description: API keys updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/StatusOk'
-    patch:
-      summary: Update single API key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: object
-                  properties:
-                    old:
-                      type: string
-                    new:
-                      type: string
-                - type: object
-                  properties:
-                    index:
-                      type: integer
-                    value:
-                      type: string
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-    delete:
-      summary: Delete API key
-      parameters:
-        - in: query
-          name: index
-          schema:
-            type: integer
-        - in: query
-          name: value
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-
-  /codex-api-key:
-    get:
-      summary: Get Codex API keys
-      responses:
-        '200':
-          description: List of Codex keys
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  codex-api-key:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CodexKey'
-    put:
-      summary: Replace all Codex keys
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: array
-                  items:
-                    $ref: '#/components/schemas/CodexKey'
-                - type: object
-                  properties:
-                    items:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/CodexKey'
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-    patch:
-      summary: Update single Codex key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                index:
-                  type: integer
-                match:
-                  type: string
-                value:
-                  $ref: '#/components/schemas/CodexKey'
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-        '404':
-          description: Item not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-    delete:
-      summary: Delete Codex key
-      parameters:
-        - in: query
-          name: api-key
-          schema:
-            type: string
-        - in: query
-          name: index
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-  /quota-exceeded/switch-project:
-    get:
-      summary: Get switch project on quota exceeded toggle
-      responses:
-        '200':
-          description: Switch project status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  switch-project:
-                    type: boolean
-    put:
-      summary: Set switch project on quota exceeded
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                value:
-                  type: boolean
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-    patch:
-      summary: Set switch project on quota exceeded (alias)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                value:
-                  type: boolean
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-
-  /api-call:
-    post:
-      summary: Execute a provider-authenticated management usage probe
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ManagementApiCallRequest'
-      responses:
-        '200':
-          description: Upstream JSON payload
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-        '400':
-          description: Invalid probe request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Auth file not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 
   /auth-files:
     get:
-      summary: List all auth files
+      summary: List managed auth files
       responses:
         '200':
-          description: List of auth files
+          description: Auth file collection
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  files:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AuthFile'
+                $ref: '#/components/schemas/AuthFilesEnvelope'
     post:
-      summary: Upload/create auth file
-      parameters:
-        - in: query
-          name: name
-          required: true
-          schema:
-            type: string
+      summary: Create or upload an auth file
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              description: Raw JSON auth payload
-              additionalProperties: true
+              $ref: '#/components/schemas/CreateAuthFileRequest'
       responses:
         '200':
-          description: Status OK
+          description: Auth file created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StatusOk'
-    delete:
-      summary: Delete auth file(s)
-      parameters:
-        - in: query
-          name: name
-          schema:
-            type: string
-        - in: query
-          name: all
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Status OK
+                $ref: '#/components/schemas/AuthFileCreateResponse'
+        '400':
+          description: Invalid auth file payload
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  deleted:
-                    type: integer
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /auth-files/download:
+  /auth-files/{name}/content:
     get:
-      summary: Download auth JSON file
+      summary: Download auth file content
       parameters:
-        - in: query
+        - in: path
           name: name
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Auth JSON file
+          description: Raw auth file JSON
           content:
             application/json:
               schema:
@@ -676,159 +327,182 @@ paths:
               schema:
                 type: string
                 example: attachment; filename="file.json"
-
-  /auth-files/status:
-    patch:
-      summary: Toggle disabled state of auth file
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                disabled:
-                  type: boolean
-      responses:
-        '200':
-          description: Status OK
+        '404':
+          description: Auth file not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  disabled:
-                    type: boolean
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /auth-files/fields:
+  /auth-files/{name}:
     patch:
-      summary: Update editable fields of auth file
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                priority:
-                  type: integer
-      responses:
-        '200':
-          description: Status OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-
-  /codex-auth-url:
-    get:
-      summary: Initiate Codex OAuth flow
+      summary: Update editable auth file fields
       parameters:
-        - in: query
-          name: is_webui
+        - in: path
+          name: name
+          required: true
           schema:
-            type: boolean
-      responses:
-        '200':
-          description: OAuth URL and state
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  url:
-                    type: string
-                  state:
-                    type: string
-
-  /oauth-callback:
-    post:
-      summary: Receive OAuth callback
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                provider:
-                  type: string
-                code:
-                  type: string
-                state:
-                  type: string
-                redirect_url:
-                  type: string
-                error:
-                  type: string
+              $ref: '#/components/schemas/AuthFilePatchRequest'
       responses:
         '200':
-          description: Status OK
+          description: Auth file updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/StatusOk'
         '400':
-          description: Bad request
+          description: Invalid auth file mutation
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  error:
-                    type: string
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
-          description: Not found
+          description: Auth file not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  error:
-                    type: string
-        '409':
-          description: Conflict
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  error:
-                    type: string
-
-  /get-auth-status:
-    get:
-      summary: Check OAuth flow status
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete an auth file
       parameters:
-        - in: query
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Auth file deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthFileDeleteResponse'
+        '404':
+          description: Auth file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth-files/{name}/usage:
+    post:
+      summary: Refresh usage for a probe-capable auth file
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Refreshed usage payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Auth file not found or has no usage probe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth-sessions:
+    post:
+      summary: Start a frontend-owned OAuth session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthSessionCreateRequest'
+      responses:
+        '200':
+          description: OAuth session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthSessionCreateResponse'
+        '400':
+          description: Invalid callback origin or provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth-sessions/{state}:
+    get:
+      summary: Get OAuth session status
+      parameters:
+        - in: path
           name: state
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: OAuth status
+          description: Current OAuth session status
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    enum: [ok, wait, error]
-                  error:
-                    type: string
+                $ref: '#/components/schemas/OAuthSessionStatusResponse'
+        '404':
+          description: OAuth session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: OAuth session expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth-sessions/{state}/callback:
+    post:
+      summary: Receive callback data from the frontend-owned OAuth page
+      parameters:
+        - in: path
+          name: state
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthSessionCallbackRequest'
+      responses:
+        '200':
+          description: Callback accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOk'
+        '400':
+          description: Invalid callback payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: OAuth session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: OAuth session already completed or conflicted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

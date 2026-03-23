@@ -46,7 +46,7 @@ func (h *Handler) ListAuthFiles(c *gin.Context) {
 		nameJ, _ := files[j]["name"].(string)
 		return strings.ToLower(nameI) < strings.ToLower(nameJ)
 	})
-	c.JSON(200, gin.H{"files": files})
+	c.JSON(200, gin.H{"items": files})
 }
 
 func (h *Handler) listAuthFilesFromStore(c *gin.Context) {
@@ -71,9 +71,10 @@ func (h *Handler) listAuthFilesFromStore(c *gin.Context) {
 		if item.Priority != nil {
 			entry["priority"] = *item.Priority
 		}
+		entry["usage_available"] = false
 		files = append(files, entry)
 	}
-	c.JSON(200, gin.H{"files": files})
+	c.JSON(200, gin.H{"items": files})
 }
 
 func (h *Handler) authMetadataByName(ctx context.Context) map[string]nacos.AuthFileMetadata {
@@ -174,8 +175,8 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, metadataByName map[str
 			entry["usage"] = usage
 		}
 	}
-	if usageProbe := buildUsageProbe(auth); usageProbe != nil {
-		entry["usage_probe"] = usageProbe
+	if usageRequest := buildAuthFileUsageRequest(auth); usageRequest != nil {
+		entry["usage_available"] = true
 	}
 	// Expose priority from Attributes (set by synthesizer from JSON "priority" field).
 	// Fall back to Metadata for auths registered via UploadAuthFile (no synthesizer).
@@ -198,35 +199,6 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, metadataByName map[str
 		}
 	}
 	return entry
-}
-
-func buildUsageProbe(auth *coreauth.Auth) gin.H {
-	if auth == nil {
-		return nil
-	}
-	if !strings.EqualFold(strings.TrimSpace(auth.Provider), "codex") {
-		return nil
-	}
-	index := auth.EnsureIndex()
-	if index == "" {
-		return nil
-	}
-	header := gin.H{
-		"Authorization": "Bearer $TOKEN$",
-		"Content-Type":  "application/json",
-		"User-Agent":    "codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal",
-	}
-	if claims := extractCodexIDTokenClaims(auth); claims != nil {
-		if accountID, ok := claims["chatgpt_account_id"].(string); ok && strings.TrimSpace(accountID) != "" {
-			header["Chatgpt-Account-Id"] = strings.TrimSpace(accountID)
-		}
-	}
-	return gin.H{
-		"authIndex": index,
-		"method":    http.MethodGet,
-		"url":       "https://chatgpt.com/backend-api/wham/usage",
-		"header":    header,
-	}
 }
 
 func extractCodexIDTokenClaims(auth *coreauth.Auth) gin.H {
@@ -272,15 +244,22 @@ func extractCodexIDTokenClaims(auth *coreauth.Auth) gin.H {
 	return result
 }
 
-// Download single auth file by name
-func (h *Handler) DownloadAuthFile(c *gin.Context) {
-	name := c.Query("name")
+func authFileNameParam(c *gin.Context) (string, bool) {
+	name := strings.TrimSpace(c.Param("name"))
 	if name == "" || strings.ContainsRune(name, '/') || strings.ContainsRune(name, '\\') {
-		c.JSON(400, gin.H{"error": "invalid name"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid name"})
+		return "", false
+	}
+	return name, true
+}
+
+func (h *Handler) GetAuthFileContent(c *gin.Context) {
+	name, ok := authFileNameParam(c)
+	if !ok {
 		return
 	}
-	if !strings.HasSuffix(strings.ToLower(name), ".json") {
-		c.JSON(400, gin.H{"error": "name must end with .json"})
+	if strings.TrimSpace(name) == "" {
+		c.JSON(400, gin.H{"error": "invalid name"})
 		return
 	}
 	if h.authStore == nil {

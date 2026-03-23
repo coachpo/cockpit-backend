@@ -5,10 +5,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
-	managementhandlers "github.com/coachpo/cockpit-backend/internal/api/handlers/management"
 	proxyconfig "github.com/coachpo/cockpit-backend/internal/config"
 	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
 	sdkaccess "github.com/coachpo/cockpit-backend/sdk/access"
@@ -75,16 +75,37 @@ func performManagementRequest(server *Server, route managementRouteCase, authHea
 	return rec
 }
 
+func routeKey(method, path string) string {
+	return method + " " + path
+}
+
+func mountedRouteSet(server *Server) map[string]struct{} {
+	routes := make(map[string]struct{})
+	for _, route := range server.engine.Routes() {
+		routes[routeKey(route.Method, route.Path)] = struct{}{}
+	}
+	return routes
+}
+
+func sortedRouteKeys(routes map[string]struct{}) []string {
+	keys := make([]string, 0, len(routes))
+	for key := range routes {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func TestManagementRetainedRouteIsAccessibleWithoutAuthorization(t *testing.T) {
 	server := newTestServer(t, nil)
 
 	rec := performManagementRequest(server, managementRouteCase{
 		method: http.MethodGet,
-		path:   "/v0/management/ws-auth",
+		path:   "/v0/management/runtime-settings",
 	}, "")
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected ws-auth route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+		t.Fatalf("expected runtime-settings route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 }
 
@@ -95,11 +116,11 @@ func TestManagementRetainedRouteIgnoresManagementPasswordEnv(t *testing.T) {
 
 	rec := performManagementRequest(server, managementRouteCase{
 		method: http.MethodGet,
-		path:   "/v0/management/ws-auth",
+		path:   "/v0/management/runtime-settings",
 	}, "")
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected ws-auth route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+		t.Fatalf("expected runtime-settings route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 	if got := rec.Header().Get("X-CPA-VERSION"); got != "" {
 		t.Fatalf("expected no X-CPA-VERSION header, got %q", got)
@@ -113,104 +134,71 @@ func TestManagementRetainedRouteIgnoresManagementPasswordEnv(t *testing.T) {
 }
 
 func TestManagementRemovedRoutesAreNotMounted(t *testing.T) {
-	removedRoutes := []managementRouteCase{
-		{name: "config get", method: http.MethodGet, path: "/v0/management/config"},
-		{name: "config yaml get", method: http.MethodGet, path: "/v0/management/config.yaml"},
-		{name: "config yaml put", method: http.MethodPut, path: "/v0/management/config.yaml", body: "debug: true\n", contentType: "application/yaml"},
-		{name: "latest version", method: http.MethodGet, path: "/v0/management/latest-version"},
-		{name: "debug get", method: http.MethodGet, path: "/v0/management/debug"},
-		{name: "debug put", method: http.MethodPut, path: "/v0/management/debug", body: `{"value":true}`, contentType: "application/json"},
-		{name: "debug patch", method: http.MethodPatch, path: "/v0/management/debug", body: `{"value":true}`, contentType: "application/json"},
-		{name: "request log get", method: http.MethodGet, path: "/v0/management/request-log"},
-		{name: "request log put", method: http.MethodPut, path: "/v0/management/request-log", body: `{"value":true}`, contentType: "application/json"},
-		{name: "request log patch", method: http.MethodPatch, path: "/v0/management/request-log", body: `{"value":true}`, contentType: "application/json"},
-		{name: "proxy url get", method: http.MethodGet, path: "/v0/management/proxy-url"},
-		{name: "proxy url put", method: http.MethodPut, path: "/v0/management/proxy-url", body: `{"value":"http://127.0.0.1:9000"}`, contentType: "application/json"},
-		{name: "proxy url patch", method: http.MethodPatch, path: "/v0/management/proxy-url", body: `{"value":"http://127.0.0.1:9000"}`, contentType: "application/json"},
-		{name: "proxy url delete", method: http.MethodDelete, path: "/v0/management/proxy-url"},
-		{name: "quota preview get", method: http.MethodGet, path: "/v0/management/quota-exceeded/switch-preview-model"},
-		{name: "quota preview put", method: http.MethodPut, path: "/v0/management/quota-exceeded/switch-preview-model", body: `{"value":true}`, contentType: "application/json"},
-		{name: "quota preview patch", method: http.MethodPatch, path: "/v0/management/quota-exceeded/switch-preview-model", body: `{"value":true}`, contentType: "application/json"},
-		{name: "force model prefix get", method: http.MethodGet, path: "/v0/management/force-model-prefix"},
-		{name: "force model prefix put", method: http.MethodPut, path: "/v0/management/force-model-prefix", body: `{"value":true}`, contentType: "application/json"},
-		{name: "force model prefix patch", method: http.MethodPatch, path: "/v0/management/force-model-prefix", body: `{"value":true}`, contentType: "application/json"},
-		{name: "oauth excluded models get", method: http.MethodGet, path: "/v0/management/oauth-excluded-models"},
-		{name: "oauth excluded models put", method: http.MethodPut, path: "/v0/management/oauth-excluded-models", body: `{}`, contentType: "application/json"},
-		{name: "oauth excluded models patch", method: http.MethodPatch, path: "/v0/management/oauth-excluded-models", body: `{"provider":"codex","models":["gpt-5"]}`, contentType: "application/json"},
-		{name: "oauth excluded models delete", method: http.MethodDelete, path: "/v0/management/oauth-excluded-models?provider=codex"},
-		{name: "oauth model alias get", method: http.MethodGet, path: "/v0/management/oauth-model-alias"},
-		{name: "oauth model alias put", method: http.MethodPut, path: "/v0/management/oauth-model-alias", body: `{}`, contentType: "application/json"},
-		{name: "oauth model alias patch", method: http.MethodPatch, path: "/v0/management/oauth-model-alias", body: `{"provider":"codex","aliases":[]}`, contentType: "application/json"},
-		{name: "oauth model alias delete", method: http.MethodDelete, path: "/v0/management/oauth-model-alias?provider=codex"},
-		{name: "model definitions", method: http.MethodGet, path: "/v0/management/model-definitions/codex"},
+	server := newTestServer(t, nil)
+	routes := mountedRouteSet(server)
+
+	removedRoutes := []string{
+		routeKey(http.MethodGet, "/v0/management/ws-auth"),
+		routeKey(http.MethodPut, "/v0/management/ws-auth"),
+		routeKey(http.MethodPatch, "/v0/management/ws-auth"),
+		routeKey(http.MethodGet, "/v0/management/request-retry"),
+		routeKey(http.MethodPut, "/v0/management/request-retry"),
+		routeKey(http.MethodPatch, "/v0/management/request-retry"),
+		routeKey(http.MethodGet, "/v0/management/max-retry-interval"),
+		routeKey(http.MethodPut, "/v0/management/max-retry-interval"),
+		routeKey(http.MethodPatch, "/v0/management/max-retry-interval"),
+		routeKey(http.MethodGet, "/v0/management/routing/strategy"),
+		routeKey(http.MethodPut, "/v0/management/routing/strategy"),
+		routeKey(http.MethodPatch, "/v0/management/routing/strategy"),
+		routeKey(http.MethodGet, "/v0/management/quota-exceeded/switch-project"),
+		routeKey(http.MethodPut, "/v0/management/quota-exceeded/switch-project"),
+		routeKey(http.MethodPatch, "/v0/management/quota-exceeded/switch-project"),
+		routeKey(http.MethodPatch, "/v0/management/api-keys"),
+		routeKey(http.MethodDelete, "/v0/management/api-keys"),
+		routeKey(http.MethodGet, "/v0/management/codex-api-key"),
+		routeKey(http.MethodPut, "/v0/management/codex-api-key"),
+		routeKey(http.MethodPatch, "/v0/management/codex-api-key"),
+		routeKey(http.MethodDelete, "/v0/management/codex-api-key"),
+		routeKey(http.MethodPost, "/v0/management/api-call"),
+		routeKey(http.MethodGet, "/v0/management/auth-files/download"),
+		routeKey(http.MethodPatch, "/v0/management/auth-files/status"),
+		routeKey(http.MethodPatch, "/v0/management/auth-files/fields"),
+		routeKey(http.MethodGet, "/v0/management/codex-auth-url"),
+		routeKey(http.MethodPost, "/v0/management/oauth-callback"),
+		routeKey(http.MethodGet, "/v0/management/get-auth-status"),
+		routeKey(http.MethodGet, "/codex/callback"),
 	}
 
 	for _, route := range removedRoutes {
-		t.Run(route.name, func(t *testing.T) {
-			server := newTestServer(t, nil)
-			rec := performManagementRequest(server, route, "")
-			if rec.Code != http.StatusNotFound {
-				t.Fatalf("expected removed route %s %s to return %d, got %d with body %s", route.method, route.path, http.StatusNotFound, rec.Code, rec.Body.String())
-			}
-		})
+		if _, ok := routes[route]; ok {
+			t.Fatalf("expected removed route %s to be absent; mounted routes: %v", route, sortedRouteKeys(routes))
+		}
 	}
 }
 
 func TestManagementRetainedRoutesRemainMounted(t *testing.T) {
-	retainedRoutes := []managementRouteCase{
-		{name: "ws auth get", method: http.MethodGet, path: "/v0/management/ws-auth"},
-		{name: "ws auth put", method: http.MethodPut, path: "/v0/management/ws-auth", body: `{"value":true}`, contentType: "application/json"},
-		{name: "ws auth patch", method: http.MethodPatch, path: "/v0/management/ws-auth", body: `{"value":true}`, contentType: "application/json"},
-		{name: "request retry get", method: http.MethodGet, path: "/v0/management/request-retry"},
-		{name: "request retry put", method: http.MethodPut, path: "/v0/management/request-retry", body: `{"value":1}`, contentType: "application/json"},
-		{name: "request retry patch", method: http.MethodPatch, path: "/v0/management/request-retry", body: `{"value":1}`, contentType: "application/json"},
-		{name: "max retry interval get", method: http.MethodGet, path: "/v0/management/max-retry-interval"},
-		{name: "max retry interval put", method: http.MethodPut, path: "/v0/management/max-retry-interval", body: `{"value":30}`, contentType: "application/json"},
-		{name: "max retry interval patch", method: http.MethodPatch, path: "/v0/management/max-retry-interval", body: `{"value":30}`, contentType: "application/json"},
-		{name: "routing strategy get", method: http.MethodGet, path: "/v0/management/routing/strategy"},
-		{name: "routing strategy put", method: http.MethodPut, path: "/v0/management/routing/strategy", body: `{"value":"round-robin"}`, contentType: "application/json"},
-		{name: "routing strategy patch", method: http.MethodPatch, path: "/v0/management/routing/strategy", body: `{"value":"round-robin"}`, contentType: "application/json"},
-		{name: "quota project get", method: http.MethodGet, path: "/v0/management/quota-exceeded/switch-project"},
-		{name: "quota project put", method: http.MethodPut, path: "/v0/management/quota-exceeded/switch-project", body: `{"value":true}`, contentType: "application/json"},
-		{name: "quota project patch", method: http.MethodPatch, path: "/v0/management/quota-exceeded/switch-project", body: `{"value":true}`, contentType: "application/json"},
-		{name: "api keys get", method: http.MethodGet, path: "/v0/management/api-keys"},
-		{name: "api keys put", method: http.MethodPut, path: "/v0/management/api-keys", body: `["test-key"]`, contentType: "application/json"},
-		{name: "api keys patch", method: http.MethodPatch, path: "/v0/management/api-keys", body: `{"old":"test-key","new":"updated-key"}`, contentType: "application/json"},
-		{name: "api keys delete", method: http.MethodDelete, path: "/v0/management/api-keys?value=test-key"},
-		{name: "codex api key get", method: http.MethodGet, path: "/v0/management/codex-api-key"},
-		{name: "codex api key put", method: http.MethodPut, path: "/v0/management/codex-api-key", body: `[]`, contentType: "application/json"},
-		{name: "codex api key patch", method: http.MethodPatch, path: "/v0/management/codex-api-key", body: `{"index":0,"value":{"base-url":""}}`, contentType: "application/json"},
-		{name: "codex api key delete", method: http.MethodDelete, path: "/v0/management/codex-api-key?index=0"},
-		{name: "auth files get", method: http.MethodGet, path: "/v0/management/auth-files"},
-		{name: "auth files upload", method: http.MethodPost, path: "/v0/management/auth-files?name=upload.json", body: `{"type":"codex"}`, contentType: "application/json"},
-		{name: "auth files delete", method: http.MethodDelete, path: "/v0/management/auth-files?name=upload.json"},
-		{name: "auth files download", method: http.MethodGet, path: "/v0/management/auth-files/download?name=upload.json"},
-		{name: "auth files status", method: http.MethodPatch, path: "/v0/management/auth-files/status", body: `{"name":"upload.json","disabled":true}`, contentType: "application/json"},
-		{name: "auth files fields", method: http.MethodPatch, path: "/v0/management/auth-files/fields", body: `{"name":"upload.json","priority":7}`, contentType: "application/json"},
-		{name: "api call", method: http.MethodPost, path: "/v0/management/api-call", body: `{"method":"GET","url":"https://example.com"}`, contentType: "application/json"},
-		{name: "oauth start", method: http.MethodGet, path: "/v0/management/codex-auth-url"},
-		{name: "oauth callback", method: http.MethodPost, path: "/v0/management/oauth-callback", body: `{"provider":"codex","state":"state-123","code":"auth-code"}`, contentType: "application/json"},
-		{name: "oauth status", method: http.MethodGet, path: "/v0/management/get-auth-status"},
+	server := newTestServer(t, nil)
+	routes := mountedRouteSet(server)
+
+	retainedRoutes := []string{
+		routeKey(http.MethodGet, "/v0/management/runtime-settings"),
+		routeKey(http.MethodPut, "/v0/management/runtime-settings"),
+		routeKey(http.MethodGet, "/v0/management/api-keys"),
+		routeKey(http.MethodPut, "/v0/management/api-keys"),
+		routeKey(http.MethodGet, "/v0/management/auth-files"),
+		routeKey(http.MethodPost, "/v0/management/auth-files"),
+		routeKey(http.MethodGet, "/v0/management/auth-files/:name/content"),
+		routeKey(http.MethodPatch, "/v0/management/auth-files/:name"),
+		routeKey(http.MethodDelete, "/v0/management/auth-files/:name"),
+		routeKey(http.MethodPost, "/v0/management/auth-files/:name/usage"),
+		routeKey(http.MethodPost, "/v0/management/oauth-sessions"),
+		routeKey(http.MethodGet, "/v0/management/oauth-sessions/:state"),
+		routeKey(http.MethodPost, "/v0/management/oauth-sessions/:state/callback"),
 	}
 
 	for _, route := range retainedRoutes {
-		t.Run(route.name, func(t *testing.T) {
-			server := newTestServer(t, func(cfg *proxyconfig.Config) {
-				cfg.CodexKey = []proxyconfig.CodexKey{{
-					APIKey:  "existing-key",
-					BaseURL: "https://example.com",
-				}}
-			})
-			if route.name == "oauth callback" {
-				managementhandlers.RegisterOAuthSession("state-123", "codex")
-				t.Cleanup(func() {
-					managementhandlers.CompleteOAuthSession("state-123")
-				})
-			}
-			rec := performManagementRequest(server, route, "")
-			if rec.Code == http.StatusNotFound {
-				t.Fatalf("expected retained route %s %s to stay mounted, got %d with body %s", route.method, route.path, rec.Code, rec.Body.String())
-			}
-		})
+		if _, ok := routes[route]; !ok {
+			t.Fatalf("expected retained route %s to stay mounted; mounted routes: %v", route, sortedRouteKeys(routes))
+		}
 	}
 }

@@ -9,29 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Generic helpers for list[string]
-func (h *Handler) putStringList(c *gin.Context, set func([]string), after func()) {
-	data, err := c.GetRawData()
-	if err != nil {
-		c.JSON(400, gin.H{"error": "failed to read body"})
-		return
-	}
-	var arr []string
-	if err = json.Unmarshal(data, &arr); err != nil {
-		var obj struct {
-			Items []string `json:"items"`
-		}
-		if err2 := json.Unmarshal(data, &obj); err2 != nil || len(obj.Items) == 0 {
-			c.JSON(400, gin.H{"error": "invalid body"})
-			return
-		}
-		arr = obj.Items
-	}
-	set(arr)
-	if after != nil {
-		after()
-	}
-	h.persist(c)
+type apiKeysEnvelope struct {
+	Items []string `json:"items"`
+}
+
+type apiKeysRequest struct {
+	Items *[]string `json:"items"`
 }
 
 func (h *Handler) patchStringList(c *gin.Context, target *[]string, after func()) {
@@ -105,12 +88,22 @@ func (h *Handler) deleteFromStringList(c *gin.Context, target *[]string, after f
 }
 
 // api-keys
-func (h *Handler) GetAPIKeys(c *gin.Context) { c.JSON(200, gin.H{"api-keys": h.cfg.APIKeys}) }
-func (h *Handler) PutAPIKeys(c *gin.Context) {
-	h.putStringList(c, func(v []string) {
-		h.cfg.APIKeys = append([]string(nil), v...)
-	}, nil)
+func (h *Handler) GetAPIKeys(c *gin.Context) {
+	items := append([]string(nil), h.cfg.APIKeys...)
+	c.JSON(200, apiKeysEnvelope{Items: items})
 }
+
+func (h *Handler) PutAPIKeys(c *gin.Context) {
+	var body apiKeysRequest
+	if err := c.ShouldBindJSON(&body); err != nil || body.Items == nil {
+		c.JSON(400, gin.H{"error": "invalid body"})
+		return
+	}
+
+	h.cfg.APIKeys = append([]string(nil), (*body.Items)...)
+	h.persist(c)
+}
+
 func (h *Handler) PatchAPIKeys(c *gin.Context) {
 	h.patchStringList(c, &h.cfg.APIKeys, func() {})
 }

@@ -6,37 +6,42 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/coachpo/cockpit-backend/internal/auth/codex"
 )
 
 const (
 	oauthSessionTTL     = 10 * time.Minute
 	maxOAuthStateLength = 128
+	oauthStatusPending  = "pending"
+	oauthStatusComplete = "complete"
+	oauthStatusError    = "error"
 )
 
 var (
-	errInvalidOAuthState      = errors.New("invalid oauth state")
-	errUnsupportedOAuthFlow   = errors.New("unsupported oauth provider")
-	errOAuthSessionNotPending = errors.New("oauth session is not pending")
+	errInvalidOAuthState    = errors.New("invalid oauth state")
+	errUnsupportedOAuthFlow = errors.New("unsupported oauth provider")
+	errOAuthSessionNotFound = errors.New("oauth session not found")
+	errOAuthSessionExpired  = errors.New("oauth session expired")
 )
 
 type oauthSession struct {
-	Provider  string
-	Status    string
-	Callback  *oauthCallbackPayload
-	CreatedAt time.Time
-	ExpiresAt time.Time
-}
-
-type oauthCallbackPayload struct {
-	Code  string
-	State string
-	Error string
+	State       string
+	Provider    string
+	RedirectURI string
+	PKCECodes   *codex.PKCECodes
+	Status      string
+	Error       string
+	AuthFile    string
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
 }
 
 type oauthSessionStore struct {
 	mu       sync.RWMutex
 	ttl      time.Duration
 	sessions map[string]oauthSession
+	expired  map[string]time.Time
 }
 
 func newOAuthSessionStore(ttl time.Duration) *oauthSessionStore {
@@ -46,6 +51,7 @@ func newOAuthSessionStore(ttl time.Duration) *oauthSessionStore {
 	return &oauthSessionStore{
 		ttl:      ttl,
 		sessions: make(map[string]oauthSession),
+		expired:  make(map[string]time.Time),
 	}
 }
 
@@ -53,15 +59,57 @@ func (s *oauthSessionStore) purgeExpiredLocked(now time.Time) {
 	for state, session := range s.sessions {
 		if !session.ExpiresAt.IsZero() && now.After(session.ExpiresAt) {
 			delete(s.sessions, state)
+			s.expired[state] = now.Add(s.ttl)
+		}
+	}
+	for state, until := range s.expired {
+		if now.After(until) {
+			delete(s.expired, state)
 		}
 	}
 }
 
-func (s *oauthSessionStore) Register(state, provider string) {
+func normalizeOAuthSession(session oauthSession) oauthSession {
+	session.State = strings.TrimSpace(session.State)
+	session.Provider = strings.ToLower(strings.TrimSpace(session.Provider))
+	session.RedirectURI = strings.TrimSpace(session.RedirectURI)
+	session.Error = strings.TrimSpace(session.Error)
+	session.AuthFile = strings.TrimSpace(session.AuthFile)
+	if session.Status == "" {
+		session.Status = oauthStatusPending
+	}
+	return session
+}
+
+func (s *oauthSessionStore) Register(session oauthSession) error {
+	session = normalizeOAuthSession(session)
+	if err := ValidateOAuthState(session.State); err != nil {
+		return err
+	}
+	if session.Provider == "" {
+		return errUnsupportedOAuthFlow
+	}
+	now := time.Now()
+	if session.CreatedAt.IsZero() {
+		session.CreatedAt = now
+	}
+	if session.ExpiresAt.IsZero() {
+		session.ExpiresAt = now.Add(s.ttl)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.purgeExpiredLocked(now)
+	delete(s.expired, session.State)
+	s.sessions[session.State] = session
+	return nil
+}
+
+func (s *oauthSessionStore) Get(state string) (oauthSession, error) {
 	state = strings.TrimSpace(state)
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	if state == "" || provider == "" {
-		return
+	if err := ValidateOAuthState(state); err != nil {
+		return oauthSession{}, err
 	}
 	now := time.Now()
 
@@ -69,20 +117,32 @@ func (s *oauthSessionStore) Register(state, provider string) {
 	defer s.mu.Unlock()
 
 	s.purgeExpiredLocked(now)
-	s.sessions[state] = oauthSession{
-		Provider:  provider,
-		Status:    "",
-		CreatedAt: now,
-		ExpiresAt: now.Add(s.ttl),
+	if _, ok := s.expired[state]; ok {
+		return oauthSession{}, errOAuthSessionExpired
 	}
+	session, ok := s.sessions[state]
+	if !ok {
+		return oauthSession{}, errOAuthSessionNotFound
+	}
+	return session, nil
 }
 
-func (s *oauthSessionStore) SetError(state, message string) {
+func (s *oauthSessionStore) Remove(state string) {
 	state = strings.TrimSpace(state)
-	message = strings.TrimSpace(message)
 	if state == "" {
 		return
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.sessions, state)
+	delete(s.expired, state)
+}
+
+func (s *oauthSessionStore) SetError(state, message string) error {
+	state = strings.TrimSpace(state)
+	message = strings.TrimSpace(message)
 	if message == "" {
 		message = "Authentication failed"
 	}
@@ -92,176 +152,88 @@ func (s *oauthSessionStore) SetError(state, message string) {
 	defer s.mu.Unlock()
 
 	s.purgeExpiredLocked(now)
+	if _, ok := s.expired[state]; ok {
+		return errOAuthSessionExpired
+	}
 	session, ok := s.sessions[state]
 	if !ok {
-		return
+		return errOAuthSessionNotFound
 	}
-	session.Status = message
-	session.ExpiresAt = now.Add(s.ttl)
-	s.sessions[state] = session
-}
-
-func (s *oauthSessionStore) Complete(state string) {
-	state = strings.TrimSpace(state)
-	if state == "" {
-		return
-	}
-	now := time.Now()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.purgeExpiredLocked(now)
-	delete(s.sessions, state)
-}
-
-func (s *oauthSessionStore) CompleteProvider(provider string) int {
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	if provider == "" {
-		return 0
-	}
-	now := time.Now()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.purgeExpiredLocked(now)
-	removed := 0
-	for state, session := range s.sessions {
-		if strings.EqualFold(session.Provider, provider) {
-			delete(s.sessions, state)
-			removed++
-		}
-	}
-	return removed
-}
-
-func (s *oauthSessionStore) Get(state string) (oauthSession, bool) {
-	state = strings.TrimSpace(state)
-	now := time.Now()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.purgeExpiredLocked(now)
-	session, ok := s.sessions[state]
-	return session, ok
-}
-
-func (s *oauthSessionStore) StoreCallback(state, provider, code, errorMessage string) error {
-	state = strings.TrimSpace(state)
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	if err := ValidateOAuthState(state); err != nil {
-		return err
-	}
-	if provider == "" {
-		return errUnsupportedOAuthFlow
-	}
-	now := time.Now()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.purgeExpiredLocked(now)
-	session, ok := s.sessions[state]
-	if !ok || session.Status != "" || !strings.EqualFold(session.Provider, provider) {
-		return errOAuthSessionNotPending
-	}
-	session.Callback = &oauthCallbackPayload{
-		Code:  strings.TrimSpace(code),
-		State: state,
-		Error: strings.TrimSpace(errorMessage),
-	}
+	session.Status = oauthStatusError
+	session.Error = message
 	session.ExpiresAt = now.Add(s.ttl)
 	s.sessions[state] = session
 	return nil
 }
 
-func (s *oauthSessionStore) ConsumeCallback(state, provider string) (oauthCallbackPayload, bool, error) {
+func (s *oauthSessionStore) Complete(state, authFile string) error {
 	state = strings.TrimSpace(state)
-	provider = strings.ToLower(strings.TrimSpace(provider))
+	authFile = strings.TrimSpace(authFile)
 	now := time.Now()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.purgeExpiredLocked(now)
+	if _, ok := s.expired[state]; ok {
+		return errOAuthSessionExpired
+	}
 	session, ok := s.sessions[state]
 	if !ok {
-		return oauthCallbackPayload{}, false, nil
+		return errOAuthSessionNotFound
 	}
-	if provider != "" && !strings.EqualFold(session.Provider, provider) {
-		return oauthCallbackPayload{}, false, errOAuthSessionNotPending
-	}
-	if session.Callback == nil {
-		return oauthCallbackPayload{}, false, nil
-	}
-	payload := *session.Callback
-	session.Callback = nil
+	session.Status = oauthStatusComplete
+	session.Error = ""
+	session.AuthFile = authFile
 	session.ExpiresAt = now.Add(s.ttl)
 	s.sessions[state] = session
-	return payload, true, nil
+	return nil
 }
 
 func (s *oauthSessionStore) IsPending(state, provider string) bool {
-	state = strings.TrimSpace(state)
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	now := time.Now()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.purgeExpiredLocked(now)
-	session, ok := s.sessions[state]
-	if !ok {
+	session, err := s.Get(state)
+	if err != nil {
 		return false
 	}
-	if session.Status != "" {
+	if session.Status != oauthStatusPending {
 		return false
 	}
 	if provider == "" {
 		return true
 	}
-	return strings.EqualFold(session.Provider, provider)
+	return strings.EqualFold(session.Provider, strings.TrimSpace(provider))
 }
 
 var oauthSessions = newOAuthSessionStore(oauthSessionTTL)
 
-func RegisterOAuthSession(state, provider string) { oauthSessions.Register(state, provider) }
-
-func SetOAuthSessionError(state, message string) { oauthSessions.SetError(state, message) }
-
-func CompleteOAuthSession(state string) { oauthSessions.Complete(state) }
-
-func CompleteOAuthSessionsByProvider(provider string) int {
-	return oauthSessions.CompleteProvider(provider)
+func RegisterOAuthSession(state, provider string) error {
+	return oauthSessions.Register(oauthSession{State: state, Provider: provider, Status: oauthStatusPending})
 }
 
-func GetOAuthSession(state string) (provider string, status string, ok bool) {
-	session, ok := oauthSessions.Get(state)
-	if !ok {
-		return "", "", false
-	}
-	return session.Provider, session.Status, true
+func RegisterOAuthSessionWithRedirect(state, provider, redirectURI string, pkceCodes *codex.PKCECodes) error {
+	return oauthSessions.Register(oauthSession{
+		State:       state,
+		Provider:    provider,
+		RedirectURI: redirectURI,
+		PKCECodes:   pkceCodes,
+		Status:      oauthStatusPending,
+	})
 }
+
+func LoadOAuthSession(state string) (oauthSession, error) { return oauthSessions.Get(state) }
+
+func SetOAuthSessionError(state, message string) error { return oauthSessions.SetError(state, message) }
+
+func CompleteOAuthSession(state string) error { return oauthSessions.Complete(state, "") }
+
+func CompleteOAuthSessionWithAuthFile(state, authFile string) error {
+	return oauthSessions.Complete(state, authFile)
+}
+
+func RemoveOAuthSession(state string) { oauthSessions.Remove(state) }
 
 func IsOAuthSessionPending(state, provider string) bool {
 	return oauthSessions.IsPending(state, provider)
-}
-
-func StoreOAuthCallbackForPendingSession(provider, state, code, errorMessage string) error {
-	canonicalProvider, err := NormalizeOAuthProvider(provider)
-	if err != nil {
-		return err
-	}
-	if !IsOAuthSessionPending(state, canonicalProvider) {
-		return errOAuthSessionNotPending
-	}
-	return oauthSessions.StoreCallback(state, canonicalProvider, code, errorMessage)
-}
-
-func consumeOAuthCallback(state, provider string) (oauthCallbackPayload, bool, error) {
-	return oauthSessions.ConsumeCallback(state, provider)
 }
 
 func ValidateOAuthState(state string) error {

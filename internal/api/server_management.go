@@ -14,44 +14,20 @@ func (s *Server) registerManagementRoutes() {
 
 	mgmt := s.engine.Group("/v0/management")
 	{
-		mgmt.GET("/quota-exceeded/switch-project", s.mgmt.GetSwitchProject)
-		mgmt.PUT("/quota-exceeded/switch-project", s.mgmt.PutSwitchProject)
-		mgmt.PATCH("/quota-exceeded/switch-project", s.mgmt.PutSwitchProject)
+		mgmt.GET("/runtime-settings", s.mgmt.GetRuntimeSettings)
+		mgmt.PUT("/runtime-settings", s.mgmt.PutRuntimeSettings)
 
 		mgmt.GET("/api-keys", s.mgmt.GetAPIKeys)
 		mgmt.PUT("/api-keys", s.mgmt.PutAPIKeys)
-		mgmt.PATCH("/api-keys", s.mgmt.PatchAPIKeys)
-		mgmt.DELETE("/api-keys", s.mgmt.DeleteAPIKeys)
-
-		mgmt.GET("/ws-auth", s.mgmt.GetWebsocketAuth)
-		mgmt.PUT("/ws-auth", s.mgmt.PutWebsocketAuth)
-		mgmt.PATCH("/ws-auth", s.mgmt.PutWebsocketAuth)
-
-		mgmt.GET("/request-retry", s.mgmt.GetRequestRetry)
-		mgmt.PUT("/request-retry", s.mgmt.PutRequestRetry)
-		mgmt.PATCH("/request-retry", s.mgmt.PutRequestRetry)
-		mgmt.GET("/max-retry-interval", s.mgmt.GetMaxRetryInterval)
-		mgmt.PUT("/max-retry-interval", s.mgmt.PutMaxRetryInterval)
-		mgmt.PATCH("/max-retry-interval", s.mgmt.PutMaxRetryInterval)
-
-		mgmt.GET("/routing/strategy", s.mgmt.GetRoutingStrategy)
-		mgmt.PUT("/routing/strategy", s.mgmt.PutRoutingStrategy)
-		mgmt.PATCH("/routing/strategy", s.mgmt.PutRoutingStrategy)
-
-		mgmt.GET("/codex-api-key", s.mgmt.GetCodexKeys)
-		mgmt.PUT("/codex-api-key", s.mgmt.PutCodexKeys)
-		mgmt.PATCH("/codex-api-key", s.mgmt.PatchCodexKey)
-		mgmt.DELETE("/codex-api-key", s.mgmt.DeleteCodexKey)
 
 		mgmt.GET("/auth-files", s.mgmt.ListAuthFiles)
-		mgmt.POST("/api-call", s.mgmt.APICall)
-		mgmt.GET("/auth-files/download", s.mgmt.DownloadAuthFile)
-		mgmt.POST("/auth-files", s.mgmt.UploadAuthFile)
-		mgmt.DELETE("/auth-files", s.mgmt.DeleteAuthFile)
-		mgmt.PATCH("/auth-files/status", s.mgmt.PatchAuthFileStatus)
-		mgmt.PATCH("/auth-files/fields", s.mgmt.PatchAuthFileFields)
-		mgmt.GET("/codex-auth-url", s.mgmt.RequestCodexToken)
-		mgmt.POST("/oauth-callback", s.mgmt.PostOAuthCallback)
-		mgmt.GET("/get-auth-status", s.mgmt.GetAuthStatus)
+		mgmt.POST("/auth-files", s.mgmt.CreateAuthFile)
+		mgmt.GET("/auth-files/:name/content", s.mgmt.GetAuthFileContent)
+		mgmt.PATCH("/auth-files/:name", s.mgmt.PatchAuthFile)
+		mgmt.DELETE("/auth-files/:name", s.mgmt.DeleteAuthFile)
+		mgmt.POST("/auth-files/:name/usage", s.mgmt.RefreshAuthFileUsage)
+		mgmt.POST("/oauth-sessions", s.mgmt.CreateOAuthSession)
+		mgmt.GET("/oauth-sessions/:state", s.mgmt.GetOAuthSessionStatus)
+		mgmt.POST("/oauth-sessions/:state/callback", s.mgmt.PostOAuthSessionCallback)
 	}
 }

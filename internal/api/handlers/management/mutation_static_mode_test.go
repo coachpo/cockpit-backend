@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/coachpo/cockpit-backend/internal/auth/codex"
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
@@ -29,10 +30,10 @@ func TestUploadAuthFile_UsesInjectedStoreWithoutWritingDisk(t *testing.T) {
 
 	uploadRec := httptest.NewRecorder()
 	uploadCtx, _ := gin.CreateTestContext(uploadRec)
-	uploadReq := httptest.NewRequest(http.MethodPost, "/v0/management/auth-files?name=upload.json", bytes.NewBufferString(`{"type":"codex","email":"upload@example.com"}`))
+	uploadReq := httptest.NewRequest(http.MethodPost, "/v0/management/auth-files", bytes.NewBufferString(`{"name":"upload.json","content":{"type":"codex","email":"upload@example.com"}}`))
 	uploadReq.Header.Set("Content-Type", "application/json")
 	uploadCtx.Request = uploadReq
-	h.UploadAuthFile(uploadCtx)
+	h.CreateAuthFile(uploadCtx)
 
 	if uploadRec.Code != http.StatusOK {
 		t.Fatalf("expected upload status %d, got %d with body %s", http.StatusOK, uploadRec.Code, uploadRec.Body.String())
@@ -59,7 +60,7 @@ func TestUploadAuthFile_UsesInjectedStoreWithoutWritingDisk(t *testing.T) {
 	}
 }
 
-func TestPatchAuthFileStatus_StaticModePersistsAndUpdatesManager(t *testing.T) {
+func TestPatchAuthFile_StaticModePersistsDisabledStateAndUpdatesManager(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
@@ -87,10 +88,11 @@ func TestPatchAuthFileStatus_StaticModePersistsAndUpdatesManager(t *testing.T) {
 
 	patchRec := httptest.NewRecorder()
 	patchCtx, _ := gin.CreateTestContext(patchRec)
-	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/status", bytes.NewBufferString(`{"name":"status.json","disabled":true}`))
+	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/status.json", bytes.NewBufferString(`{"disabled":true}`))
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchCtx.Request = patchReq
-	h.PatchAuthFileStatus(patchCtx)
+	patchCtx.Params = gin.Params{{Key: "name", Value: "status.json"}}
+	h.PatchAuthFile(patchCtx)
 
 	if patchRec.Code != http.StatusOK {
 		t.Fatalf("expected patch status code %d, got %d with body %s", http.StatusOK, patchRec.Code, patchRec.Body.String())
@@ -115,7 +117,7 @@ func TestPatchAuthFileStatus_StaticModePersistsAndUpdatesManager(t *testing.T) {
 	}
 }
 
-func TestPatchAuthFileFields_StaticModePersistsAndUpdatesManager(t *testing.T) {
+func TestPatchAuthFile_StaticModePersistsPriorityAndUpdatesManager(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
@@ -143,10 +145,11 @@ func TestPatchAuthFileFields_StaticModePersistsAndUpdatesManager(t *testing.T) {
 
 	patchRec := httptest.NewRecorder()
 	patchCtx, _ := gin.CreateTestContext(patchRec)
-	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/fields", bytes.NewBufferString(`{"name":"fields.json","priority":7}`))
+	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/fields.json", bytes.NewBufferString(`{"priority":7}`))
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchCtx.Request = patchReq
-	h.PatchAuthFileFields(patchCtx)
+	patchCtx.Params = gin.Params{{Key: "name", Value: "fields.json"}}
+	h.PatchAuthFile(patchCtx)
 
 	if patchRec.Code != http.StatusOK {
 		t.Fatalf("expected patch fields code %d, got %d with body %s", http.StatusOK, patchRec.Code, patchRec.Body.String())
@@ -183,7 +186,68 @@ func TestPatchAuthFileFields_StaticModePersistsAndUpdatesManager(t *testing.T) {
 	}
 }
 
-func TestRequestCodexToken_StaticModeReturnsOAuthStartPayload(t *testing.T) {
+func TestPatchAuthFile_PreservesPriorityZero(t *testing.T) {
+	t.Setenv("MANAGEMENT_PASSWORD", "")
+	gin.SetMode(gin.TestMode)
+
+	authDir := t.TempDir()
+	filePath := filepath.Join(authDir, "zero.json")
+	if errWrite := os.WriteFile(filePath, []byte(`{"type":"codex","priority":5}`), 0o600); errWrite != nil {
+		t.Fatalf("failed to seed auth file: %v", errWrite)
+	}
+	manager := coreauth.NewManager(nil, nil, nil)
+	if _, errRegister := manager.Register(context.Background(), &coreauth.Auth{
+		ID:       "zero.json",
+		FileName: "zero.json",
+		Provider: "codex",
+		Status:   coreauth.StatusActive,
+		Attributes: map[string]string{
+			managedStoreAttribute: "true",
+			"priority":            "5",
+		},
+		Metadata: map[string]any{"type": "codex", "priority": 5},
+	}); errRegister != nil {
+		t.Fatalf("failed to register auth: %v", errRegister)
+	}
+
+	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: authDir}, manager)
+	h.authStore = nacos.NewStaticAuthStore(authDir)
+
+	patchRec := httptest.NewRecorder()
+	patchCtx, _ := gin.CreateTestContext(patchRec)
+	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/zero.json", bytes.NewBufferString(`{"priority":0}`))
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchCtx.Request = patchReq
+	patchCtx.Params = gin.Params{{Key: "name", Value: "zero.json"}}
+	h.PatchAuthFile(patchCtx)
+
+	if patchRec.Code != http.StatusOK {
+		t.Fatalf("expected patch code %d, got %d with body %s", http.StatusOK, patchRec.Code, patchRec.Body.String())
+	}
+	updated, ok := manager.GetByID("zero.json")
+	if !ok {
+		t.Fatalf("expected auth to remain available in manager")
+	}
+	if got := updated.Attributes["priority"]; got != "0" {
+		t.Fatalf("expected manager priority attribute 0, got %#v", updated.Attributes)
+	}
+	if got := updated.Metadata["priority"]; got != 0 && got != float64(0) {
+		t.Fatalf("expected manager priority metadata 0, got %#v", updated.Metadata)
+	}
+	raw, errRead := os.ReadFile(filePath)
+	if errRead != nil {
+		t.Fatalf("failed to read updated auth file: %v", errRead)
+	}
+	var saved map[string]any
+	if err := json.Unmarshal(raw, &saved); err != nil {
+		t.Fatalf("failed to decode updated auth file: %v", err)
+	}
+	if got := saved["priority"]; got != float64(0) {
+		t.Fatalf("expected persisted priority 0, got %+v", saved)
+	}
+}
+
+func TestCreateOAuthSession_StaticModeReturnsOAuthStartPayload(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
@@ -193,44 +257,48 @@ func TestRequestCodexToken_StaticModeReturnsOAuthStartPayload(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodGet, "/v0/management/codex-auth-url", nil)
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/v0/management/oauth-sessions", bytes.NewBufferString(`{"provider":"codex","callback_origin":"http://127.0.0.1:5173"}`))
+	req.Header.Set("Content-Type", "application/json")
 	ctx.Request = req
-	h.RequestCodexToken(ctx)
+	h.CreateOAuthSession(ctx)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected codex auth request status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+		t.Fatalf("expected oauth session create status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 	var body map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("failed to decode oauth start response: %v", err)
+		t.Fatalf("failed to decode oauth session create response: %v", err)
 	}
 	state, _ := body["state"].(string)
 	if state == "" {
-		t.Fatalf("expected oauth start response to include state, got %s", rec.Body.String())
+		t.Fatalf("expected oauth session create response to include state, got %s", rec.Body.String())
 	}
-	CompleteOAuthSession(state)
+	RemoveOAuthSession(state)
 	if body["status"] != "ok" {
 		t.Fatalf("expected oauth start status ok, got %s", rec.Body.String())
 	}
 }
 
-func TestPostOAuthCallback_DoesNotWriteCallbackFile(t *testing.T) {
+func TestPostOAuthSessionCallback_DoesNotWriteCallbackFile(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
 	authDir := t.TempDir()
 	state := "state-123"
-	RegisterOAuthSession(state, "codex")
-	defer CompleteOAuthSession(state)
+	if err := RegisterOAuthSessionWithRedirect(state, "codex", "http://127.0.0.1:5173/codex/callback", &codex.PKCECodes{CodeVerifier: "verifier", CodeChallenge: "challenge"}); err != nil {
+		t.Fatalf("failed to register oauth session: %v", err)
+	}
+	defer RemoveOAuthSession(state)
 
 	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: authDir}, nil)
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPost, "/v0/management/oauth-callback", bytes.NewBufferString(`{"provider":"codex","state":"state-123","code":"auth-code"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v0/management/oauth-sessions/state-123/callback", bytes.NewBufferString(`{"provider":"codex","error":"access_denied"}`))
 	req.Header.Set("Content-Type", "application/json")
 	ctx.Request = req
-	h.PostOAuthCallback(ctx)
+	ctx.Params = gin.Params{{Key: "state", Value: "state-123"}}
+	h.PostOAuthSessionCallback(ctx)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected oauth callback status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
@@ -244,8 +312,12 @@ func TestPostOAuthCallback_DoesNotWriteCallbackFile(t *testing.T) {
 			t.Fatalf("expected oauth callback to avoid writing callback files, found %s", entry.Name())
 		}
 	}
-	if !IsOAuthSessionPending(state, "codex") {
-		t.Fatalf("expected oauth session to remain pending until callback is consumed")
+	session, err := LoadOAuthSession(state)
+	if err != nil {
+		t.Fatalf("expected oauth session to remain queryable, got %v", err)
+	}
+	if session.Status != oauthStatusError {
+		t.Fatalf("expected oauth session error state after callback error, got %+v", session)
 	}
 }
 
@@ -334,23 +406,23 @@ func TestListAuthFiles_ExposesUsageSubscriptionAndActiveFallback(t *testing.T) {
 	}
 
 	var payload struct {
-		Files []struct {
-			ID         string         `json:"id"`
-			Status     string         `json:"status"`
-			Usage      map[string]any `json:"usage"`
-			UsageProbe map[string]any `json:"usage_probe"`
-			IDToken    map[string]any `json:"id_token"`
-			Disabled   bool           `json:"disabled"`
-		} `json:"files"`
+		Items []struct {
+			ID             string         `json:"id"`
+			Status         string         `json:"status"`
+			Usage          map[string]any `json:"usage"`
+			UsageAvailable bool           `json:"usage_available"`
+			IDToken        map[string]any `json:"id_token"`
+			Disabled       bool           `json:"disabled"`
+		} `json:"items"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("failed to decode auth files response: %v", err)
 	}
-	if len(payload.Files) != 1 {
-		t.Fatalf("expected 1 auth file, got %d (%s)", len(payload.Files), rec.Body.String())
+	if len(payload.Items) != 1 {
+		t.Fatalf("expected 1 auth file, got %d (%s)", len(payload.Items), rec.Body.String())
 	}
 
-	file := payload.Files[0]
+	file := payload.Items[0]
 	if file.ID != "oauth-auth" {
 		t.Fatalf("expected auth id oauth-auth, got %q", file.ID)
 	}
@@ -363,11 +435,11 @@ func TestListAuthFiles_ExposesUsageSubscriptionAndActiveFallback(t *testing.T) {
 	if got := file.Usage["remaining"]; got != float64(42) {
 		t.Fatalf("expected usage payload to be exposed, got %#v", file.Usage)
 	}
-	if got := file.UsageProbe["authIndex"]; got == nil || got == "" {
-		t.Fatalf("expected usage_probe authIndex to be exposed, got %#v", file.UsageProbe)
+	if !file.UsageAvailable {
+		t.Fatalf("expected usage_available=true, got %#v", file)
 	}
-	if got := file.UsageProbe["url"]; got != "https://chatgpt.com/backend-api/wham/usage" {
-		t.Fatalf("expected usage probe url to be set, got %#v", got)
+	if strings.Contains(rec.Body.String(), "usage_probe") {
+		t.Fatalf("did not expect usage_probe in list response, got %s", rec.Body.String())
 	}
 	if got := file.IDToken["plan_type"]; got != "team" {
 		t.Fatalf("expected plan_type team, got %#v", got)

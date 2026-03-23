@@ -7,6 +7,67 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type runtimeSettingsResponse struct {
+	WebsocketAuth    bool   `json:"ws-auth"`
+	RequestRetry     int    `json:"request-retry"`
+	MaxRetryInterval int    `json:"max-retry-interval"`
+	RoutingStrategy  string `json:"routing-strategy"`
+	SwitchProject    bool   `json:"switch-project"`
+}
+
+type runtimeSettingsRequest struct {
+	WebsocketAuth    *bool   `json:"ws-auth"`
+	RequestRetry     *int    `json:"request-retry"`
+	MaxRetryInterval *int    `json:"max-retry-interval"`
+	RoutingStrategy  *string `json:"routing-strategy"`
+	SwitchProject    *bool   `json:"switch-project"`
+}
+
+func (h *Handler) currentRuntimeSettings() runtimeSettingsResponse {
+	strategy, ok := normalizeRoutingStrategy(h.cfg.Routing.Strategy)
+	if !ok {
+		strategy = strings.TrimSpace(h.cfg.Routing.Strategy)
+	}
+
+	return runtimeSettingsResponse{
+		WebsocketAuth:    h.cfg.WebsocketAuth,
+		RequestRetry:     h.cfg.RequestRetry,
+		MaxRetryInterval: h.cfg.MaxRetryInterval,
+		RoutingStrategy:  strategy,
+		SwitchProject:    h.cfg.QuotaExceeded.SwitchProject,
+	}
+}
+
+func (h *Handler) GetRuntimeSettings(c *gin.Context) {
+	c.JSON(http.StatusOK, h.currentRuntimeSettings())
+}
+
+func (h *Handler) PutRuntimeSettings(c *gin.Context) {
+	var body runtimeSettingsRequest
+	if err := c.ShouldBindJSON(&body); err != nil ||
+		body.WebsocketAuth == nil ||
+		body.RequestRetry == nil ||
+		body.MaxRetryInterval == nil ||
+		body.RoutingStrategy == nil ||
+		body.SwitchProject == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+
+	normalizedStrategy, ok := normalizeRoutingStrategy(*body.RoutingStrategy)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid strategy"})
+		return
+	}
+
+	h.cfg.WebsocketAuth = *body.WebsocketAuth
+	h.cfg.RequestRetry = *body.RequestRetry
+	h.cfg.MaxRetryInterval = *body.MaxRetryInterval
+	h.cfg.Routing.Strategy = normalizedStrategy
+	h.cfg.QuotaExceeded.SwitchProject = *body.SwitchProject
+	h.persist(c)
+}
+
 // Websocket auth
 func (h *Handler) GetWebsocketAuth(c *gin.Context) {
 	c.JSON(200, gin.H{"ws-auth": h.cfg.WebsocketAuth})

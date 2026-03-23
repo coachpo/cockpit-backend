@@ -75,13 +75,16 @@ func registerManagedCodexAuth(t *testing.T, manager *coreauth.Manager, auth *cor
 	return stored.EnsureIndex()
 }
 
-func TestAPICall_UsesAuthProbeRequestAndReturnsJSON(t *testing.T) {
+func TestRefreshAuthFileUsage_UsesBackendOwnedProbeAndReturnsJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	manager := coreauth.NewManager(nil, nil, nil)
-	index := registerManagedCodexAuth(t, manager, &coreauth.Auth{
+	registerManagedCodexAuth(t, manager, &coreauth.Auth{
 		ID:       "usage.json",
 		FileName: "usage.json",
-		Metadata: map[string]any{"token": "runtime-token"},
+		Metadata: map[string]any{
+			"token":    "runtime-token",
+			"id_token": testCodexIDToken(t, "usage@example.com", "acct_123", "plus"),
+		},
 	})
 
 	manager.RegisterExecutor(apiCallTestExecutor{
@@ -117,63 +120,70 @@ func TestAPICall_UsesAuthProbeRequestAndReturnsJSON(t *testing.T) {
 	h := NewHandlerWithoutConfigFilePath(&config.Config{}, manager)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/api-call", bytes.NewBufferString(`{"authIndex":"`+index+`","method":"GET","url":"https://chatgpt.com/backend-api/wham/usage","header":{"Authorization":"Bearer $TOKEN$","Chatgpt-Account-Id":"acct_123"}}`))
-	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/auth-files/usage.json/usage", nil)
+	ctx.Params = gin.Params{{Key: "name", Value: "usage.json"}}
 
-	h.APICall(ctx)
+	h.RefreshAuthFileUsage(ctx)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected api-call status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+		t.Fatalf("expected usage status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode api-call response: %v", err)
+		t.Fatalf("failed to decode usage response: %v", err)
 	}
 	if got := payload["remaining"]; got != float64(42) {
 		t.Fatalf("expected remaining=42, got %#v", payload)
 	}
-}
-
-func TestAPICall_RejectsMissingMethodOrURL(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, coreauth.NewManager(nil, nil, nil))
-
-	for _, body := range []string{
-		`{"authIndex":"abc","method":"","url":"https://example.com"}`,
-		`{"authIndex":"abc","method":"GET","url":" "}`,
-	} {
-		rec := httptest.NewRecorder()
-		ctx, _ := gin.CreateTestContext(rec)
-		ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/api-call", bytes.NewBufferString(body))
-		ctx.Request.Header.Set("Content-Type", "application/json")
-		h.APICall(ctx)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected api-call status %d, got %d with body %s", http.StatusBadRequest, rec.Code, rec.Body.String())
-		}
+	stored, ok := manager.GetByID("usage.json")
+	if !ok || stored == nil {
+		t.Fatalf("expected auth to remain registered")
+	}
+	usage, _ := stored.Metadata["usage"].(map[string]any)
+	if got := usage["remaining"]; got != float64(42) {
+		t.Fatalf("expected refreshed usage to be persisted, got %#v", stored.Metadata)
 	}
 }
 
-func TestAPICall_ReturnsNotFoundForUnknownAuthIndex(t *testing.T) {
+func TestRefreshAuthFileUsage_ReturnsNotFoundWhenUsageUnavailable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	manager := coreauth.NewManager(nil, nil, nil)
+	registerManagedCodexAuth(t, manager, &coreauth.Auth{ID: "usage.json", FileName: "usage.json", Provider: "other"})
+	h := NewHandlerWithoutConfigFilePath(&config.Config{}, manager)
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/auth-files/usage.json/usage", nil)
+	ctx.Params = gin.Params{{Key: "name", Value: "usage.json"}}
+
+	h.RefreshAuthFileUsage(ctx)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected usage status %d, got %d with body %s", http.StatusNotFound, rec.Code, rec.Body.String())
+	}
+}
+
+func TestRefreshAuthFileUsage_ReturnsNotFoundForUnknownAuthFile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := NewHandlerWithoutConfigFilePath(&config.Config{}, coreauth.NewManager(nil, nil, nil))
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/api-call", bytes.NewBufferString(`{"authIndex":"missing","method":"GET","url":"https://example.com"}`))
-	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/auth-files/missing.json/usage", nil)
+	ctx.Params = gin.Params{{Key: "name", Value: "missing.json"}}
 
-	h.APICall(ctx)
+	h.RefreshAuthFileUsage(ctx)
 
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected api-call status %d, got %d with body %s", http.StatusNotFound, rec.Code, rec.Body.String())
+		t.Fatalf("expected usage status %d, got %d with body %s", http.StatusNotFound, rec.Code, rec.Body.String())
 	}
 }
 
-func TestAPICall_PropagatesUpstreamErrors(t *testing.T) {
+func TestRefreshAuthFileUsage_PropagatesUpstreamErrors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	manager := coreauth.NewManager(nil, nil, nil)
-	index := registerManagedCodexAuth(t, manager, &coreauth.Auth{
+	registerManagedCodexAuth(t, manager, &coreauth.Auth{
 		ID:       "usage.json",
 		FileName: "usage.json",
+		Metadata: map[string]any{"id_token": testCodexIDToken(t, "usage@example.com", "acct_123", "plus")},
 	})
 	manager.RegisterExecutor(apiCallTestExecutor{
 		httpDo: func(req *http.Request, auth *coreauth.Auth) (*http.Response, error) {
@@ -188,13 +198,13 @@ func TestAPICall_PropagatesUpstreamErrors(t *testing.T) {
 	h := NewHandlerWithoutConfigFilePath(&config.Config{}, manager)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/api-call", bytes.NewBufferString(`{"authIndex":"`+index+`","method":"GET","url":"https://example.com"}`))
-	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/auth-files/usage.json/usage", nil)
+	ctx.Params = gin.Params{{Key: "name", Value: "usage.json"}}
 
-	h.APICall(ctx)
+	h.RefreshAuthFileUsage(ctx)
 
 	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("expected api-call status %d, got %d with body %s", http.StatusTooManyRequests, rec.Code, rec.Body.String())
+		t.Fatalf("expected usage status %d, got %d with body %s", http.StatusTooManyRequests, rec.Code, rec.Body.String())
 	}
 	if got := rec.Body.String(); got != `{"error":"quota exceeded"}` {
 		t.Fatalf("expected upstream body to pass through, got %s", got)
