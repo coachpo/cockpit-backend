@@ -1,0 +1,163 @@
+name: Backend Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-assets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            archive_ext: tar.gz
+          - goos: linux
+            goarch: arm64
+            archive_ext: tar.gz
+          - goos: darwin
+            goarch: amd64
+            archive_ext: tar.gz
+          - goos: darwin
+            goarch: arm64
+            archive_ext: tar.gz
+          - goos: windows
+            goarch: amd64
+            archive_ext: zip
+          - goos: windows
+            goarch: arm64
+            archive_ext: zip
+
+    steps:
+      - name: Resolve release tag
+        id: release_meta
+        env:
+          INPUT_TAG: ${{ inputs.tag || '' }}
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            release_tag="${{ github.ref_name }}"
+          elif [ -n "$INPUT_TAG" ]; then
+            release_tag="$INPUT_TAG"
+          else
+            echo "::error::workflow_dispatch requires an existing tag input or a tag ref."
+            exit 1
+          fi
+
+          echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.release_meta.outputs.tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build and package binaries
+        id: package
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          ARCHIVE_EXT: ${{ matrix.archive_ext }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          asset_stem="cockpit_${RELEASE_TAG}_${GOOS}_${GOARCH}"
+          stage_dir="dist/${asset_stem}"
+          binary_suffix=""
+
+          if [ "$GOOS" = "windows" ]; then
+            binary_suffix=".exe"
+          fi
+
+          mkdir -p "$stage_dir"
+
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -ldflags="-s -w" -o "$stage_dir/cockpit${binary_suffix}" ./cmd/cockpit
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -ldflags="-s -w" -o "$stage_dir/cockpit-oauth-helper${binary_suffix}" ./cmd/cockpit-oauth-helper
+
+          asset_name="${asset_stem}.${ARCHIVE_EXT}"
+
+          if [ "$ARCHIVE_EXT" = "zip" ]; then
+            (
+              cd "$stage_dir"
+              zip -qr "../${asset_name}" .
+            )
+          else
+            tar -C "$stage_dir" -czf "dist/${asset_name}" .
+          fi
+
+          rm -rf "$stage_dir"
+          echo "asset_name=$asset_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload packaged asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.asset_name }}
+          path: dist/${{ steps.package.outputs.asset_name }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release:
+    needs: build-assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Resolve release tag
+        id: release_meta
+        env:
+          INPUT_TAG: ${{ inputs.tag || '' }}
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            release_tag="${{ github.ref_name }}"
+          elif [ -n "$INPUT_TAG" ]; then
+            release_tag="$INPUT_TAG"
+          else
+            echo "::error::workflow_dispatch requires an existing tag input or a tag ref."
+            exit 1
+          fi
+
+          echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Download packaged assets
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          assets=(dist/*)
+
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "::error::No release assets were downloaded."
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes
+          fi
