@@ -30,7 +30,6 @@ func TestMainExitsNonZeroWhenBootstrapFails(t *testing.T) {
 	cmd.Env = append(os.Environ(),
 		"COCKPIT_MAIN_FAIL_HELPER=1",
 		"NACOS_ADDR=",
-		"DEPLOY=",
 	)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
