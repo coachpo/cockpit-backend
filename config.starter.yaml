@@ -4,7 +4,7 @@
 host: "127.0.0.1"
 port: 8317
 
-# In local static mode, auth JSON files live here if you add OAuth/file-backed auth later.
+# In local static mode, auth JSON files live here.
 auth-dir: "./cockpit"
 
 # Optional inbound API keys for callers of this proxy. Leave empty for local-only use.
