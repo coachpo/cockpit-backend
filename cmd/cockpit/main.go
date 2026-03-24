@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	configaccess "github.com/coachpo/cockpit-backend/internal/access/config_access"
 	"github.com/coachpo/cockpit-backend/internal/cmd"
@@ -22,8 +23,10 @@ import (
 )
 
 const (
-	hostUsage = "HTTP host override for the management server listener"
-	portUsage = "HTTP port override for the management server listener"
+	hostUsage                       = "HTTP host override for the management server listener"
+	portUsage                       = "HTTP port override for the management server listener"
+	nacosBootstrapReadinessTimeout  = 5 * time.Second
+	nacosBootstrapReadinessInterval = 250 * time.Millisecond
 )
 
 type commandOptions struct {
@@ -144,6 +147,10 @@ type bootstrapLoaders struct {
 	loadNacos func() (*bootstrapConfig, error)
 }
 
+type nacosBootstrapAvailabilityClient interface {
+	WaitUntilAvailable(timeout, interval time.Duration) error
+}
+
 func resolveBootstrapConfig(loaders bootstrapLoaders) (*bootstrapConfig, error) {
 	if loaders.loadNacos == nil {
 		loaders.loadNacos = loadNacosBootstrapConfig
@@ -172,12 +179,25 @@ func loadNacosBootstrapConfig() (*bootstrapConfig, error) {
 	if client == nil {
 		return nil, fmt.Errorf("nacos configured but client was not created")
 	}
+	if err := waitForNacosBootstrapReadiness(client); err != nil {
+		return nil, err
+	}
 
 	configSource := nacos.NewNacosConfigStore(client)
 	authStore := nacos.NewNacosAuthStore(client)
 
 	return bootstrapFromNacosStores(configSource, authStore, configSource.LoadConfig, authStore.List)
 
+}
+
+func waitForNacosBootstrapReadiness(client nacosBootstrapAvailabilityClient) error {
+	if client == nil {
+		return fmt.Errorf("wait for nacos availability: client is nil")
+	}
+	if err := client.WaitUntilAvailable(nacosBootstrapReadinessTimeout, nacosBootstrapReadinessInterval); err != nil {
+		return fmt.Errorf("wait for nacos availability: %w", err)
+	}
+	return nil
 }
 
 func bootstrapFromNacosStores(

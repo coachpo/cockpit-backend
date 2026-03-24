@@ -8,11 +8,24 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
+
+type stubNacosBootstrapAvailabilityClient struct {
+	timeout  time.Duration
+	interval time.Duration
+	err      error
+}
+
+func (s *stubNacosBootstrapAvailabilityClient) WaitUntilAvailable(timeout, interval time.Duration) error {
+	s.timeout = timeout
+	s.interval = interval
+	return s.err
+}
 
 func TestMainExitsNonZeroWhenBootstrapFails(t *testing.T) {
 	if os.Getenv("COCKPIT_MAIN_FAIL_HELPER") == "1" {
@@ -259,5 +272,34 @@ func TestResolveBootstrapConfig_FailsWhenBootstrapConfigSourceIsMissing(t *testi
 	}
 	if !strings.Contains(err.Error(), "config source") {
 		t.Fatalf("expected missing config source error, got %q", err)
+	}
+}
+
+func TestWaitForNacosBootstrapReadiness_UsesConfiguredWindow(t *testing.T) {
+	stub := &stubNacosBootstrapAvailabilityClient{}
+
+	if err := waitForNacosBootstrapReadiness(stub); err != nil {
+		t.Fatalf("waitForNacosBootstrapReadiness() error = %v", err)
+	}
+	if stub.timeout != nacosBootstrapReadinessTimeout || stub.interval != nacosBootstrapReadinessInterval {
+		t.Fatalf(
+			"expected readiness wait to use timeout=%s interval=%s, got timeout=%s interval=%s",
+			nacosBootstrapReadinessTimeout,
+			nacosBootstrapReadinessInterval,
+			stub.timeout,
+			stub.interval,
+		)
+	}
+}
+
+func TestWaitForNacosBootstrapReadiness_WrapsAvailabilityError(t *testing.T) {
+	stub := &stubNacosBootstrapAvailabilityClient{err: errors.New("client not connected, current status:STARTING")}
+
+	err := waitForNacosBootstrapReadiness(stub)
+	if err == nil {
+		t.Fatal("expected waitForNacosBootstrapReadiness() to fail when availability wait fails")
+	}
+	if !strings.Contains(err.Error(), "wait for nacos availability") || !strings.Contains(err.Error(), stub.err.Error()) {
+		t.Fatalf("expected wrapped availability error, got %v", err)
 	}
 }
