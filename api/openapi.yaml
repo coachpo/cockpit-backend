@@ -4,7 +4,7 @@ info:
   version: 7.0.0
   description: Resource-oriented management API for Cockpit.
 servers:
-  - url: /v0/management
+  - url: /api
     description: Local management server
 
 components:
@@ -444,7 +444,7 @@ paths:
         description: Backend callback origin
     get:
       summary: Complete the backend-owned OAuth callback
-      description: Primary OAuth popup callback endpoint. The frontend should continue polling GET /v0/management/oauth-sessions/{state} for completion status.
+      description: Primary OAuth popup callback endpoint. The frontend should continue polling GET /api/oauth-sessions/{state} for completion status.
       parameters:
         - in: query
           name: state

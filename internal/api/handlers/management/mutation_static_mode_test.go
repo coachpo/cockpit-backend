@@ -30,7 +30,7 @@ func TestUploadAuthFile_UsesInjectedStoreWithoutWritingDisk(t *testing.T) {
 
 	uploadRec := httptest.NewRecorder()
 	uploadCtx, _ := gin.CreateTestContext(uploadRec)
-	uploadReq := httptest.NewRequest(http.MethodPost, "/v0/management/auth-files", bytes.NewBufferString(`{"name":"upload.json","content":{"type":"codex","email":"upload@example.com"}}`))
+	uploadReq := httptest.NewRequest(http.MethodPost, "/api/auth-files", bytes.NewBufferString(`{"name":"upload.json","content":{"type":"codex","email":"upload@example.com"}}`))
 	uploadReq.Header.Set("Content-Type", "application/json")
 	uploadCtx.Request = uploadReq
 	h.CreateAuthFile(uploadCtx)
@@ -88,7 +88,7 @@ func TestPatchAuthFile_StaticModePersistsDisabledStateAndUpdatesManager(t *testi
 
 	patchRec := httptest.NewRecorder()
 	patchCtx, _ := gin.CreateTestContext(patchRec)
-	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/status.json", bytes.NewBufferString(`{"disabled":true}`))
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/auth-files/status.json", bytes.NewBufferString(`{"disabled":true}`))
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchCtx.Request = patchReq
 	patchCtx.Params = gin.Params{{Key: "name", Value: "status.json"}}
@@ -145,7 +145,7 @@ func TestPatchAuthFile_StaticModePersistsPriorityAndUpdatesManager(t *testing.T)
 
 	patchRec := httptest.NewRecorder()
 	patchCtx, _ := gin.CreateTestContext(patchRec)
-	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/fields.json", bytes.NewBufferString(`{"priority":7}`))
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/auth-files/fields.json", bytes.NewBufferString(`{"priority":7}`))
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchCtx.Request = patchReq
 	patchCtx.Params = gin.Params{{Key: "name", Value: "fields.json"}}
@@ -215,7 +215,7 @@ func TestPatchAuthFile_PreservesPriorityZero(t *testing.T) {
 
 	patchRec := httptest.NewRecorder()
 	patchCtx, _ := gin.CreateTestContext(patchRec)
-	patchReq := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/zero.json", bytes.NewBufferString(`{"priority":0}`))
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/auth-files/zero.json", bytes.NewBufferString(`{"priority":0}`))
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchCtx.Request = patchReq
 	patchCtx.Params = gin.Params{{Key: "name", Value: "zero.json"}}
@@ -264,7 +264,7 @@ func TestCreateOAuthSession_StaticModeReturnsOAuthStartPayload(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/v0/management/oauth-sessions", bytes.NewBufferString(`{"provider":"codex"}`))
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/api/oauth-sessions", bytes.NewBufferString(`{"provider":"codex"}`))
 	req.Header.Set("Content-Type", "application/json")
 	ctx.Request = req
 	h.CreateOAuthSession(ctx)
@@ -301,7 +301,7 @@ func TestPostOAuthSessionCallback_DoesNotWriteCallbackFile(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPost, "/v0/management/oauth-sessions/state-123/callback", bytes.NewBufferString(`{"provider":"codex","error":"access_denied"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/oauth-sessions/state-123/callback", bytes.NewBufferString(`{"provider":"codex","error":"access_denied"}`))
 	req.Header.Set("Content-Type", "application/json")
 	ctx.Request = req
 	ctx.Params = gin.Params{{Key: "state", Value: "state-123"}}
@@ -360,7 +360,7 @@ func TestListAuthFiles_ExcludesConfigBackedManagerEntries(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodGet, "/v0/management/auth-files", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/auth-files", nil)
 	ctx.Request = req
 	h.ListAuthFiles(ctx)
 
@@ -405,7 +405,7 @@ func TestListAuthFiles_ExposesUsageSubscriptionAndActiveFallback(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodGet, "/v0/management/auth-files", nil)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/auth-files", nil)
 	h.ListAuthFiles(ctx)
 
 	if rec.Code != http.StatusOK {

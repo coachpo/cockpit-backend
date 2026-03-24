@@ -24,7 +24,7 @@ func TestGetRuntimeSettings_ReturnsAggregatedResource(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodGet, "/v0/management/runtime-settings", nil)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/runtime-settings", nil)
 
 	h.GetRuntimeSettings(ctx)
 
@@ -59,7 +59,7 @@ func TestPutRuntimeSettings_UpdatesAllFieldsAndPersists(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPut, "/v0/management/runtime-settings", bytes.NewBufferString(`{"ws-auth":true,"request-retry":4,"max-retry-interval":90,"routing-strategy":"fillfirst","switch-project":true}`))
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/runtime-settings", bytes.NewBufferString(`{"ws-auth":true,"request-retry":4,"max-retry-interval":90,"routing-strategy":"fillfirst","switch-project":true}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 
 	h.PutRuntimeSettings(ctx)
@@ -85,7 +85,7 @@ func TestPutRuntimeSettings_InvalidStrategyRejectedWithoutMutation(t *testing.T)
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPut, "/v0/management/runtime-settings", bytes.NewBufferString(`{"ws-auth":true,"request-retry":4,"max-retry-interval":90,"routing-strategy":"invalid","switch-project":true}`))
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/runtime-settings", bytes.NewBufferString(`{"ws-auth":true,"request-retry":4,"max-retry-interval":90,"routing-strategy":"invalid","switch-project":true}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 
 	h.PutRuntimeSettings(ctx)
@@ -105,7 +105,7 @@ func TestGetAPIKeys_ReturnsItemsEnvelope(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodGet, "/v0/management/api-keys", nil)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/api-keys", nil)
 
 	h.GetAPIKeys(ctx)
 
@@ -132,7 +132,7 @@ func TestPutAPIKeys_RequiresItemsEnvelope(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPut, "/v0/management/api-keys", bytes.NewBufferString(`{"items":["next","final"]}`))
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/api-keys", bytes.NewBufferString(`{"items":["next","final"]}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 
 	h.PutAPIKeys(ctx)

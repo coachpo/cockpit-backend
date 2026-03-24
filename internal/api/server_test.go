@@ -101,7 +101,7 @@ func TestManagementRetainedRouteIsAccessibleWithoutAuthorization(t *testing.T) {
 
 	rec := performManagementRequest(server, managementRouteCase{
 		method: http.MethodGet,
-		path:   "/v0/management/runtime-settings",
+		path:   "/api/runtime-settings",
 	}, "")
 
 	if rec.Code != http.StatusOK {
@@ -116,7 +116,7 @@ func TestManagementRetainedRouteIgnoresManagementPasswordEnv(t *testing.T) {
 
 	rec := performManagementRequest(server, managementRouteCase{
 		method: http.MethodGet,
-		path:   "/v0/management/runtime-settings",
+		path:   "/api/runtime-settings",
 	}, "")
 
 	if rec.Code != http.StatusOK {
@@ -153,34 +153,34 @@ func TestManagementRemovedRoutesAreNotMounted(t *testing.T) {
 	routes := mountedRouteSet(server)
 
 	removedRoutes := []string{
-		routeKey(http.MethodGet, "/v0/management/ws-auth"),
-		routeKey(http.MethodPut, "/v0/management/ws-auth"),
-		routeKey(http.MethodPatch, "/v0/management/ws-auth"),
-		routeKey(http.MethodGet, "/v0/management/request-retry"),
-		routeKey(http.MethodPut, "/v0/management/request-retry"),
-		routeKey(http.MethodPatch, "/v0/management/request-retry"),
-		routeKey(http.MethodGet, "/v0/management/max-retry-interval"),
-		routeKey(http.MethodPut, "/v0/management/max-retry-interval"),
-		routeKey(http.MethodPatch, "/v0/management/max-retry-interval"),
-		routeKey(http.MethodGet, "/v0/management/routing/strategy"),
-		routeKey(http.MethodPut, "/v0/management/routing/strategy"),
-		routeKey(http.MethodPatch, "/v0/management/routing/strategy"),
-		routeKey(http.MethodGet, "/v0/management/quota-exceeded/switch-project"),
-		routeKey(http.MethodPut, "/v0/management/quota-exceeded/switch-project"),
-		routeKey(http.MethodPatch, "/v0/management/quota-exceeded/switch-project"),
-		routeKey(http.MethodPatch, "/v0/management/api-keys"),
-		routeKey(http.MethodDelete, "/v0/management/api-keys"),
-		routeKey(http.MethodGet, "/v0/management/codex-api-key"),
-		routeKey(http.MethodPut, "/v0/management/codex-api-key"),
-		routeKey(http.MethodPatch, "/v0/management/codex-api-key"),
-		routeKey(http.MethodDelete, "/v0/management/codex-api-key"),
-		routeKey(http.MethodPost, "/v0/management/api-call"),
-		routeKey(http.MethodGet, "/v0/management/auth-files/download"),
-		routeKey(http.MethodPatch, "/v0/management/auth-files/status"),
-		routeKey(http.MethodPatch, "/v0/management/auth-files/fields"),
-		routeKey(http.MethodGet, "/v0/management/codex-auth-url"),
-		routeKey(http.MethodPost, "/v0/management/oauth-callback"),
-		routeKey(http.MethodGet, "/v0/management/get-auth-status"),
+		routeKey(http.MethodGet, "/api/ws-auth"),
+		routeKey(http.MethodPut, "/api/ws-auth"),
+		routeKey(http.MethodPatch, "/api/ws-auth"),
+		routeKey(http.MethodGet, "/api/request-retry"),
+		routeKey(http.MethodPut, "/api/request-retry"),
+		routeKey(http.MethodPatch, "/api/request-retry"),
+		routeKey(http.MethodGet, "/api/max-retry-interval"),
+		routeKey(http.MethodPut, "/api/max-retry-interval"),
+		routeKey(http.MethodPatch, "/api/max-retry-interval"),
+		routeKey(http.MethodGet, "/api/routing/strategy"),
+		routeKey(http.MethodPut, "/api/routing/strategy"),
+		routeKey(http.MethodPatch, "/api/routing/strategy"),
+		routeKey(http.MethodGet, "/api/quota-exceeded/switch-project"),
+		routeKey(http.MethodPut, "/api/quota-exceeded/switch-project"),
+		routeKey(http.MethodPatch, "/api/quota-exceeded/switch-project"),
+		routeKey(http.MethodPatch, "/api/api-keys"),
+		routeKey(http.MethodDelete, "/api/api-keys"),
+		routeKey(http.MethodGet, "/api/codex-api-key"),
+		routeKey(http.MethodPut, "/api/codex-api-key"),
+		routeKey(http.MethodPatch, "/api/codex-api-key"),
+		routeKey(http.MethodDelete, "/api/codex-api-key"),
+		routeKey(http.MethodPost, "/api/api-call"),
+		routeKey(http.MethodGet, "/api/auth-files/download"),
+		routeKey(http.MethodPatch, "/api/auth-files/status"),
+		routeKey(http.MethodPatch, "/api/auth-files/fields"),
+		routeKey(http.MethodGet, "/api/codex-auth-url"),
+		routeKey(http.MethodPost, "/api/oauth-callback"),
+		routeKey(http.MethodGet, "/api/get-auth-status"),
 		routeKey(http.MethodGet, "/codex/callback"),
 	}
 
@@ -196,19 +196,19 @@ func TestManagementRetainedRoutesRemainMounted(t *testing.T) {
 	routes := mountedRouteSet(server)
 
 	retainedRoutes := []string{
-		routeKey(http.MethodGet, "/v0/management/runtime-settings"),
-		routeKey(http.MethodPut, "/v0/management/runtime-settings"),
-		routeKey(http.MethodGet, "/v0/management/api-keys"),
-		routeKey(http.MethodPut, "/v0/management/api-keys"),
-		routeKey(http.MethodGet, "/v0/management/auth-files"),
-		routeKey(http.MethodPost, "/v0/management/auth-files"),
-		routeKey(http.MethodGet, "/v0/management/auth-files/:name/content"),
-		routeKey(http.MethodPatch, "/v0/management/auth-files/:name"),
-		routeKey(http.MethodDelete, "/v0/management/auth-files/:name"),
-		routeKey(http.MethodPost, "/v0/management/auth-files/:name/usage"),
-		routeKey(http.MethodPost, "/v0/management/oauth-sessions"),
-		routeKey(http.MethodGet, "/v0/management/oauth-sessions/:state"),
-		routeKey(http.MethodPost, "/v0/management/oauth-sessions/:state/callback"),
+		routeKey(http.MethodGet, "/api/runtime-settings"),
+		routeKey(http.MethodPut, "/api/runtime-settings"),
+		routeKey(http.MethodGet, "/api/api-keys"),
+		routeKey(http.MethodPut, "/api/api-keys"),
+		routeKey(http.MethodGet, "/api/auth-files"),
+		routeKey(http.MethodPost, "/api/auth-files"),
+		routeKey(http.MethodGet, "/api/auth-files/:name/content"),
+		routeKey(http.MethodPatch, "/api/auth-files/:name"),
+		routeKey(http.MethodDelete, "/api/auth-files/:name"),
+		routeKey(http.MethodPost, "/api/auth-files/:name/usage"),
+		routeKey(http.MethodPost, "/api/oauth-sessions"),
+		routeKey(http.MethodGet, "/api/oauth-sessions/:state"),
+		routeKey(http.MethodPost, "/api/oauth-sessions/:state/callback"),
 		routeKey(http.MethodGet, "/auth/callback"),
 	}
 

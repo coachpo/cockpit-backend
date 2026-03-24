@@ -195,7 +195,7 @@ func TestCreateOAuthSession_UsesBackendLoopbackRedirect(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/v0/management/oauth-sessions", strings.NewReader(`{"provider":"codex"}`))
+	ctx.Request = httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/api/oauth-sessions", strings.NewReader(`{"provider":"codex"}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 
 	h.CreateOAuthSession(ctx)
@@ -253,7 +253,7 @@ func TestCreateOAuthSession_IgnoresLegacyCallbackOriginAndUsesForwardedBackendOr
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/v0/management/oauth-sessions", strings.NewReader(`{"provider":"codex","callback_origin":"https://evil.example"}`))
+	ctx.Request = httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/api/oauth-sessions", strings.NewReader(`{"provider":"codex","callback_origin":"https://evil.example"}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 	ctx.Request.Header.Set("X-Forwarded-Proto", "https")
 	ctx.Request.Header.Set("X-Forwarded-Host", "cockpit.example.com:9443")
@@ -303,7 +303,7 @@ func TestGetOAuthSessionStatus_ReturnsGoneForExpiredSession(t *testing.T) {
 	h := NewHandlerWithoutConfigFilePath(&config.Config{}, nil)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodGet, "/v0/management/oauth-sessions/expired-state", nil)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/oauth-sessions/expired-state", nil)
 	ctx.Params = gin.Params{{Key: "state", Value: "expired-state"}}
 
 	h.GetOAuthSessionStatus(ctx)
@@ -341,7 +341,7 @@ func TestPostOAuthSessionCallback_UsesStoredRedirectURIForExchange(t *testing.T)
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/oauth-sessions/state-123/callback", strings.NewReader(`{"provider":"codex","code":"auth-code"}`))
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/oauth-sessions/state-123/callback", strings.NewReader(`{"provider":"codex","code":"auth-code"}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 	ctx.Params = gin.Params{{Key: "state", Value: "state-123"}}
 

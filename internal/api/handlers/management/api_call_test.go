@@ -120,7 +120,7 @@ func TestRefreshAuthFileUsage_UsesBackendOwnedProbeAndReturnsJSON(t *testing.T) 
 	h := NewHandlerWithoutConfigFilePath(&config.Config{}, manager)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/auth-files/usage.json/usage", nil)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/auth-files/usage.json/usage", nil)
 	ctx.Params = gin.Params{{Key: "name", Value: "usage.json"}}
 
 	h.RefreshAuthFileUsage(ctx)
@@ -152,7 +152,7 @@ func TestRefreshAuthFileUsage_ReturnsNotFoundWhenUsageUnavailable(t *testing.T) 
 	h := NewHandlerWithoutConfigFilePath(&config.Config{}, manager)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/auth-files/usage.json/usage", nil)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/auth-files/usage.json/usage", nil)
 	ctx.Params = gin.Params{{Key: "name", Value: "usage.json"}}
 
 	h.RefreshAuthFileUsage(ctx)
@@ -167,7 +167,7 @@ func TestRefreshAuthFileUsage_ReturnsNotFoundForUnknownAuthFile(t *testing.T) {
 	h := NewHandlerWithoutConfigFilePath(&config.Config{}, coreauth.NewManager(nil, nil, nil))
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/auth-files/missing.json/usage", nil)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/auth-files/missing.json/usage", nil)
 	ctx.Params = gin.Params{{Key: "name", Value: "missing.json"}}
 
 	h.RefreshAuthFileUsage(ctx)
@@ -198,7 +198,7 @@ func TestRefreshAuthFileUsage_PropagatesUpstreamErrors(t *testing.T) {
 	h := NewHandlerWithoutConfigFilePath(&config.Config{}, manager)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v0/management/auth-files/usage.json/usage", nil)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/auth-files/usage.json/usage", nil)
 	ctx.Params = gin.Params{{Key: "name", Value: "usage.json"}}
 
 	h.RefreshAuthFileUsage(ctx)

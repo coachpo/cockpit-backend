@@ -16,7 +16,7 @@ Persistent management API. Owns config edits, auth-file lifecycle, upstream API-
 
 ## LOCAL CONVENTIONS
 - Persist config through the injected `ConfigSource.SaveConfig`, not plain marshal/write code.
-- The current trimmed `/v0/management` surface is mounted without request-access middleware; if auth enforcement returns, update this file alongside the route tests.
+- The current trimmed `/api` surface is mounted without request-access middleware; if auth enforcement returns, update this file alongside the route tests.
 - Redact or avoid secrets in responses and logs.
 - Reuse `h.persist()` and the helper setters in `handler.go` for scalar and list config endpoints. Full YAML replacement is the only path that calls the saver directly.
 - Auth-file writes are dual-update operations: persist through `authStore`, then mirror runtime state through `authManager` with `coreauth.WithSkipPersist` to avoid double writes.

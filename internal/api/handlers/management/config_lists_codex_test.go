@@ -27,7 +27,7 @@ func TestPatchCodexKey_UpdatesRetainedFields(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPatch, "/v0/management/codex-api-key", bytes.NewBufferString(`{"index":0,"value":{"api-key":" next-key ","base-url":" https://next.invalid/v1 ","priority":7,"websockets":true,"headers":{" X-Test ":" ok ","Drop":"   "}}}`))
+	req := httptest.NewRequest(http.MethodPatch, "/api/codex-api-key", bytes.NewBufferString(`{"index":0,"value":{"api-key":" next-key ","base-url":" https://next.invalid/v1 ","priority":7,"websockets":true,"headers":{" X-Test ":" ok ","Drop":"   "}}}`))
 	req.Header.Set("Content-Type", "application/json")
 	ctx.Request = req
 
@@ -72,7 +72,7 @@ func TestPatchCodexKey_MatchNormalizesStoredAPIKey(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPatch, "/v0/management/codex-api-key", bytes.NewBufferString(`{"match":"existing-key","value":{"priority":7}}`))
+	req := httptest.NewRequest(http.MethodPatch, "/api/codex-api-key", bytes.NewBufferString(`{"match":"existing-key","value":{"priority":7}}`))
 	req.Header.Set("Content-Type", "application/json")
 	ctx.Request = req
 
@@ -103,7 +103,7 @@ func TestDeleteCodexKey_NormalizesStoredAndRequestedAPIKey(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodDelete, "/v0/management/codex-api-key?api-key=%20existing-key%20", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/codex-api-key?api-key=%20existing-key%20", nil)
 	ctx.Request = req
 
 	h.DeleteCodexKey(ctx)
@@ -130,7 +130,7 @@ func TestPatchCodexKey_BlankBaseURLRejected(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPatch, "/v0/management/codex-api-key", bytes.NewBufferString(`{"index":0,"value":{"base-url":"   "}}`))
+	req := httptest.NewRequest(http.MethodPatch, "/api/codex-api-key", bytes.NewBufferString(`{"index":0,"value":{"base-url":"   "}}`))
 	req.Header.Set("Content-Type", "application/json")
 	ctx.Request = req
 
@@ -158,7 +158,7 @@ func TestPutCodexKeys_BlankBaseURLRejected(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPut, "/v0/management/codex-api-key", bytes.NewBufferString(`[{"api-key":"next-key","base-url":"   "}]`))
+	req := httptest.NewRequest(http.MethodPut, "/api/codex-api-key", bytes.NewBufferString(`[{"api-key":"next-key","base-url":"   "}]`))
 	req.Header.Set("Content-Type", "application/json")
 	ctx.Request = req
 

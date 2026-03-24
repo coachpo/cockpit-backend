@@ -51,7 +51,7 @@ func TestDeleteAuthFile_UsesInjectedStoreIDWithoutFilesystemMutation(t *testing.
 
 	deleteRec := httptest.NewRecorder()
 	deleteCtx, _ := gin.CreateTestContext(deleteRec)
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/v0/management/auth-files/"+fileName, nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/auth-files/"+fileName, nil)
 	deleteCtx.Request = deleteReq
 	deleteCtx.Params = gin.Params{{Key: "name", Value: fileName}}
 	h.DeleteAuthFile(deleteCtx)
@@ -68,7 +68,7 @@ func TestDeleteAuthFile_UsesInjectedStoreIDWithoutFilesystemMutation(t *testing.
 
 	listRec := httptest.NewRecorder()
 	listCtx, _ := gin.CreateTestContext(listRec)
-	listReq := httptest.NewRequest(http.MethodGet, "/v0/management/auth-files", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/auth-files", nil)
 	listCtx.Request = listReq
 	h.ListAuthFiles(listCtx)
 
@@ -101,7 +101,7 @@ func TestDownloadAuthFile_UsesStoreReadByNameWithoutDisk(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodGet, "/v0/management/auth-files/download.json/content", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/auth-files/download.json/content", nil)
 	ctx.Request = req
 	ctx.Params = gin.Params{{Key: "name", Value: "download.json"}}
 	h.GetAuthFileContent(ctx)
@@ -135,7 +135,7 @@ func TestListAuthFiles_UsesStoreMetadataWhenManagerUnavailable(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodGet, "/v0/management/auth-files", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/auth-files", nil)
 	ctx.Request = req
 	h.ListAuthFiles(ctx)
 
@@ -196,7 +196,7 @@ func TestDeleteAuthFile_StaticModeRejectsBeforeFilesystemMutation(t *testing.T) 
 
 	deleteRec := httptest.NewRecorder()
 	deleteCtx, _ := gin.CreateTestContext(deleteRec)
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/v0/management/auth-files/"+fileName, nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/auth-files/"+fileName, nil)
 	deleteCtx.Request = deleteReq
 	deleteCtx.Params = gin.Params{{Key: "name", Value: fileName}}
 	h.DeleteAuthFile(deleteCtx)

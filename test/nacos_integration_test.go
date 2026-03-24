@@ -703,7 +703,7 @@ func waitForManagementAuth(httpClient *http.Client, port int, payload string, ti
 }
 
 func fetchManagementAuthFiles(httpClient *http.Client, port int) ([]managementAuthFile, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v0/management/auth-files", port), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/auth-files", port), nil)
 	if err != nil {
 		return nil, fmt.Errorf("build management auth request: %w", err)
 	}
@@ -729,7 +729,7 @@ func fetchManagementAuthFiles(httpClient *http.Client, port int) ([]managementAu
 func uploadManagementAuthFile(httpClient *http.Client, port int, name string, body string) error {
 	req, err := http.NewRequest(
 		http.MethodPost,
-		fmt.Sprintf("http://127.0.0.1:%d/v0/management/auth-files?name=%s", port, url.QueryEscape(name)),
+		fmt.Sprintf("http://127.0.0.1:%d/api/auth-files?name=%s", port, url.QueryEscape(name)),
 		strings.NewReader(body),
 	)
 	if err != nil {
