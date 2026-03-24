@@ -4,11 +4,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/coachpo/cockpit-backend/internal/auth/codex"
 	proxyconfig "github.com/coachpo/cockpit-backend/internal/config"
@@ -28,28 +31,121 @@ var newCodexOAuthClient = func(cfg *proxyconfig.Config) codexOAuthClient {
 	return codex.NewCodexAuth(cfg)
 }
 
-type oauthSessionCreateRequest struct {
-	Provider       string `json:"provider"`
-	CallbackOrigin string `json:"callback_origin"`
+const codexCallbackPort = 1455
+
+type callbackForwarder struct {
+	server *http.Server
+	done   chan struct{}
 }
 
-func buildFrontendCallbackURL(callbackOrigin string) (string, error) {
-	callbackOrigin = strings.TrimSpace(callbackOrigin)
-	if callbackOrigin == "" {
-		return "", fmt.Errorf("callback_origin is required")
+var (
+	callbackForwardersMu     sync.Mutex
+	callbackForwarders       = make(map[int]*callbackForwarder)
+	startOAuthCallbackServer = startCallbackForwarder
+)
+
+type oauthSessionCreateRequest struct {
+	Provider string `json:"provider"`
+}
+
+func buildBackendCallbackURL(origin *url.URL) (string, error) {
+	if origin == nil {
+		return "", fmt.Errorf("request origin is unavailable")
 	}
-	parsed, err := url.Parse(callbackOrigin)
-	if err != nil || strings.TrimSpace(parsed.Scheme) == "" || strings.TrimSpace(parsed.Host) == "" {
-		return "", fmt.Errorf("invalid callback_origin")
+	if strings.TrimSpace(origin.Scheme) == "" || strings.TrimSpace(origin.Host) == "" {
+		return "", fmt.Errorf("request origin is invalid")
 	}
-	if !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
-		return "", fmt.Errorf("invalid callback_origin")
+
+	callbackURL := *origin
+	if isLoopbackHost(callbackURL.Hostname()) {
+		port := callbackURL.Port()
+		callbackURL.Host = "localhost"
+		if port != "" {
+			callbackURL.Host = net.JoinHostPort(callbackURL.Host, port)
+		}
 	}
-	parsed.Path = "/codex/callback"
-	parsed.RawPath = ""
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.String(), nil
+	callbackURL.Path = "/auth/callback"
+	callbackURL.RawPath = ""
+	callbackURL.RawQuery = ""
+	callbackURL.Fragment = ""
+	return callbackURL.String(), nil
+}
+
+func startCallbackForwarder(port int, targetBase string) (*callbackForwarder, error) {
+	callbackForwardersMu.Lock()
+	prev := callbackForwarders[port]
+	if prev != nil {
+		delete(callbackForwarders, port)
+	}
+	callbackForwardersMu.Unlock()
+	if prev != nil {
+		stopCallbackForwarderInstance(port, prev)
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, fmt.Errorf("failed to listen on callback port %d: %w", port, err)
+	}
+
+	forwarder := &callbackForwarder{done: make(chan struct{})}
+	server := &http.Server{
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      5 * time.Second,
+	}
+	server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target := targetBase
+		if rawQuery := strings.TrimSpace(r.URL.RawQuery); rawQuery != "" {
+			if strings.Contains(target, "?") {
+				target += "&" + rawQuery
+			} else {
+				target += "?" + rawQuery
+			}
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		http.Redirect(w, r, target, http.StatusFound)
+		go stopCallbackForwarderInstance(port, forwarder)
+	})
+	forwarder.server = server
+
+	go func() {
+		if errServe := server.Serve(listener); errServe != nil && !errors.Is(errServe, http.ErrServerClosed) {
+		}
+		close(forwarder.done)
+	}()
+
+	go func() {
+		select {
+		case <-time.After(oauthSessionTTL):
+			stopCallbackForwarderInstance(port, forwarder)
+		case <-forwarder.done:
+		}
+	}()
+
+	callbackForwardersMu.Lock()
+	callbackForwarders[port] = forwarder
+	callbackForwardersMu.Unlock()
+
+	return forwarder, nil
+}
+
+func stopCallbackForwarderInstance(port int, forwarder *callbackForwarder) {
+	if forwarder == nil || forwarder.server == nil {
+		return
+	}
+
+	callbackForwardersMu.Lock()
+	if current := callbackForwarders[port]; current == forwarder {
+		delete(callbackForwarders, port)
+	}
+	callbackForwardersMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = forwarder.server.Shutdown(ctx)
+	select {
+	case <-forwarder.done:
+	case <-time.After(2 * time.Second):
+	}
 }
 
 func firstForwardedValue(value string) string {
@@ -96,45 +192,6 @@ func isLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func normalizeOriginKey(origin *url.URL) string {
-	if origin == nil {
-		return ""
-	}
-	host := strings.ToLower(origin.Hostname())
-	if host == "" {
-		return ""
-	}
-	port := origin.Port()
-	switch {
-	case strings.EqualFold(origin.Scheme, "http") && port == "80":
-		port = ""
-	case strings.EqualFold(origin.Scheme, "https") && port == "443":
-		port = ""
-	}
-	if port != "" {
-		return strings.ToLower(origin.Scheme) + "://" + net.JoinHostPort(host, port)
-	}
-	return strings.ToLower(origin.Scheme) + "://" + host
-}
-
-func validateFrontendCallbackOrigin(c *gin.Context, callbackURL string) error {
-	requestOrigin, err := requestPublicOrigin(c)
-	if err != nil {
-		return err
-	}
-	callbackOrigin, err := url.Parse(strings.TrimSpace(callbackURL))
-	if err != nil {
-		return fmt.Errorf("invalid callback_origin")
-	}
-	if normalizeOriginKey(callbackOrigin) == normalizeOriginKey(requestOrigin) {
-		return nil
-	}
-	if isLoopbackHost(callbackOrigin.Hostname()) && isLoopbackHost(requestOrigin.Hostname()) {
-		return nil
-	}
-	return fmt.Errorf("callback_origin must match the current frontend origin")
-}
-
 func oauthSessionStateParam(c *gin.Context) (string, bool) {
 	state := strings.TrimSpace(c.Param("state"))
 	if state == "" {
@@ -165,34 +222,44 @@ func (h *Handler) CreateOAuthSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported provider"})
 		return
 	}
-	frontendCallbackURL, err := buildFrontendCallbackURL(req.CallbackOrigin)
+	requestOrigin, err := requestPublicOrigin(c)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := validateFrontendCallbackOrigin(c, frontendCallbackURL); err != nil {
+	backendCallbackURL, err := buildBackendCallbackURL(requestOrigin)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	forwarder, err := startOAuthCallbackServer(codexCallbackPort, backendCallbackURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start local callback listener"})
 		return
 	}
 
 	pkceCodes, err := codex.GeneratePKCECodes()
 	if err != nil {
+		stopCallbackForwarderInstance(codexCallbackPort, forwarder)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate PKCE codes"})
 		return
 	}
 	state, err := misc.GenerateRandomState()
 	if err != nil {
+		stopCallbackForwarderInstance(codexCallbackPort, forwarder)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate state parameter"})
 		return
 	}
 
 	authClient := newCodexOAuthClient(h.cfg)
-	authURL, err := authClient.GenerateAuthURLWithRedirect(state, frontendCallbackURL, pkceCodes)
+	authURL, err := authClient.GenerateAuthURL(state, pkceCodes)
 	if err != nil {
+		stopCallbackForwarderInstance(codexCallbackPort, forwarder)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate authorization url"})
 		return
 	}
-	if err := RegisterOAuthSessionWithRedirect(state, provider, frontendCallbackURL, pkceCodes); err != nil {
+	if err := RegisterOAuthSessionWithRedirect(state, provider, codex.RedirectURI, pkceCodes); err != nil {
+		stopCallbackForwarderInstance(codexCallbackPort, forwarder)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register oauth session"})
 		return
 	}

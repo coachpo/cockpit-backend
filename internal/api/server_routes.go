@@ -36,6 +36,9 @@ func (s *Server) setupRoutes() {
 			},
 		})
 	})
+	if s.mgmt != nil {
+		s.engine.GET("/auth/callback", s.mgmt.GetOAuthCallback)
+	}
 
 	// Management routes are registered lazily by registerManagementRoutes when a secret is configured.
 }

@@ -2,6 +2,7 @@ package management
 
 import (
 	"errors"
+	"html"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,12 +19,138 @@ type oauthSessionCallbackRequest struct {
 	ErrorDescription string `json:"error_description"`
 }
 
-func (h *Handler) PostOAuthSessionCallback(c *gin.Context) {
+type oauthSessionCompletionResult struct {
+	StatusCode int
+	Provider   string
+	State      string
+	AuthFile   string
+	Error      string
+}
+
+func normalizeOAuthCallbackProvider(provider string) (string, error) {
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return "", nil
+	}
+	return NormalizeOAuthProvider(provider)
+}
+
+func (h *Handler) completeOAuthSession(c *gin.Context, state, provider, code, errMsg string) oauthSessionCompletionResult {
 	if h == nil || h.cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "handler not initialized"})
-		return
+		return oauthSessionCompletionResult{StatusCode: http.StatusInternalServerError, Error: "handler not initialized"}
 	}
 
+	state = strings.TrimSpace(state)
+	if state == "" {
+		return oauthSessionCompletionResult{StatusCode: http.StatusBadRequest, Error: "state is required"}
+	}
+	if err := ValidateOAuthState(state); err != nil {
+		return oauthSessionCompletionResult{StatusCode: http.StatusBadRequest, State: state, Error: "invalid state"}
+	}
+
+	normalizedProvider, err := normalizeOAuthCallbackProvider(provider)
+	if err != nil {
+		return oauthSessionCompletionResult{StatusCode: http.StatusBadRequest, State: state, Error: "unsupported provider"}
+	}
+
+	code = strings.TrimSpace(code)
+	errMsg = strings.TrimSpace(errMsg)
+	if code == "" && errMsg == "" {
+		return oauthSessionCompletionResult{StatusCode: http.StatusBadRequest, State: state, Error: "code or error is required"}
+	}
+
+	session, err := LoadOAuthSession(state)
+	if err != nil {
+		switch {
+		case errors.Is(err, errOAuthSessionNotFound):
+			return oauthSessionCompletionResult{StatusCode: http.StatusNotFound, State: state, Error: "oauth session not found"}
+		case errors.Is(err, errOAuthSessionExpired):
+			return oauthSessionCompletionResult{StatusCode: http.StatusGone, State: state, Error: "oauth session expired"}
+		default:
+			return oauthSessionCompletionResult{StatusCode: http.StatusBadRequest, State: state, Error: "invalid state"}
+		}
+	}
+
+	result := oauthSessionCompletionResult{StatusCode: http.StatusOK, Provider: session.Provider, State: state}
+	if session.Status != oauthStatusPending {
+		result.StatusCode = http.StatusConflict
+		result.Error = "oauth flow is not pending"
+		return result
+	}
+	if normalizedProvider != "" && !strings.EqualFold(session.Provider, normalizedProvider) {
+		result.StatusCode = http.StatusBadRequest
+		result.Error = "provider does not match state"
+		return result
+	}
+	if strings.TrimSpace(session.RedirectURI) == "" || session.PKCECodes == nil {
+		result.StatusCode = http.StatusConflict
+		result.Error = "oauth session is incomplete"
+		return result
+	}
+
+	if errMsg != "" {
+		_ = SetOAuthSessionError(state, errMsg)
+		result.Error = errMsg
+		return result
+	}
+
+	authClient := newCodexOAuthClient(h.cfg)
+	bundle, errExchange := authClient.ExchangeCodeForTokensWithRedirect(PopulateAuthContext(c.Request.Context(), c), code, session.RedirectURI, session.PKCECodes)
+	if errExchange != nil {
+		result.StatusCode = http.StatusBadGateway
+		result.Error = "Failed to exchange authorization code for tokens"
+		_ = SetOAuthSessionError(state, result.Error)
+		return result
+	}
+
+	record := buildCodexOAuthRecord(bundle)
+	if _, errSave := h.saveTokenRecord(c.Request.Context(), record); errSave != nil {
+		result.StatusCode = http.StatusInternalServerError
+		result.Error = "Failed to save authentication tokens"
+		_ = SetOAuthSessionError(state, result.Error)
+		return result
+	}
+	if errUpsert := h.upsertManagedAuth(c.Request.Context(), record); errUpsert != nil {
+		result.StatusCode = http.StatusInternalServerError
+		result.Error = "Failed to activate authentication tokens"
+		_ = SetOAuthSessionError(state, result.Error)
+		return result
+	}
+	if errComplete := CompleteOAuthSessionWithAuthFile(state, record.FileName); errComplete != nil {
+		result.StatusCode = http.StatusInternalServerError
+		result.Error = "failed to finalize oauth session"
+		return result
+	}
+
+	result.AuthFile = record.FileName
+	return result
+}
+
+func renderOAuthCallbackHTML(c *gin.Context, result oauthSessionCompletionResult) {
+	title := "Authentication failed"
+	heading := "Authentication failed"
+	message := strings.TrimSpace(result.Error)
+	if strings.TrimSpace(result.AuthFile) != "" {
+		title = "Authentication successful"
+		heading = "Authentication successful"
+		message = "You can close this window and return to Cockpit."
+	} else if message == "" {
+		message = "Authentication failed. Check Cockpit for details."
+	}
+
+	body := "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>" + html.EscapeString(title) + "</title><script>setTimeout(function(){window.close();},5000);</script></head><body><h1>" + html.EscapeString(heading) + "</h1><p>" + html.EscapeString(message) + "</p><p>You can close this window now. It will close automatically in 5 seconds.</p></body></html>"
+	c.Data(result.StatusCode, "text/html; charset=utf-8", []byte(body))
+}
+
+func (h *Handler) GetOAuthCallback(c *gin.Context) {
+	errMsg := strings.TrimSpace(c.Query("error_description"))
+	if errMsg == "" {
+		errMsg = strings.TrimSpace(c.Query("error"))
+	}
+	renderOAuthCallbackHTML(c, h.completeOAuthSession(c, c.Query("state"), "", c.Query("code"), errMsg))
+}
+
+func (h *Handler) PostOAuthSessionCallback(c *gin.Context) {
 	state, ok := oauthSessionStateParam(c)
 	if !ok {
 		return
@@ -32,12 +159,6 @@ func (h *Handler) PostOAuthSessionCallback(c *gin.Context) {
 	var req oauthSessionCallbackRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid body"})
-		return
-	}
-
-	provider, err := NormalizeOAuthProvider(req.Provider)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "unsupported provider"})
 		return
 	}
 
@@ -73,65 +194,16 @@ func (h *Handler) PostOAuthSessionCallback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "state does not match resource"})
 		return
 	}
-	if code == "" && errMsg == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "code or error is required"})
+
+	result := h.completeOAuthSession(c, state, req.Provider, code, errMsg)
+	if result.StatusCode != http.StatusOK {
+		c.JSON(result.StatusCode, gin.H{"status": "error", "error": result.Error})
 		return
 	}
 
-	session, err := LoadOAuthSession(state)
-	if err != nil {
-		switch {
-		case errors.Is(err, errOAuthSessionNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"status": "error", "error": "oauth session not found"})
-		case errors.Is(err, errOAuthSessionExpired):
-			c.JSON(http.StatusGone, gin.H{"status": "error", "error": "oauth session expired"})
-		default:
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid state"})
-		}
-		return
+	response := gin.H{"status": "ok"}
+	if strings.TrimSpace(result.AuthFile) != "" {
+		response["auth_file"] = result.AuthFile
 	}
-	if session.Status != oauthStatusPending {
-		c.JSON(http.StatusConflict, gin.H{"status": "error", "error": "oauth flow is not pending"})
-		return
-	}
-	if !strings.EqualFold(session.Provider, provider) {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "provider does not match state"})
-		return
-	}
-	if strings.TrimSpace(session.RedirectURI) == "" || session.PKCECodes == nil {
-		c.JSON(http.StatusConflict, gin.H{"status": "error", "error": "oauth session is incomplete"})
-		return
-	}
-
-	if errMsg != "" {
-		_ = SetOAuthSessionError(state, errMsg)
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		return
-	}
-
-	authClient := newCodexOAuthClient(h.cfg)
-	bundle, errExchange := authClient.ExchangeCodeForTokensWithRedirect(PopulateAuthContext(c.Request.Context(), c), code, session.RedirectURI, session.PKCECodes)
-	if errExchange != nil {
-		_ = SetOAuthSessionError(state, "Failed to exchange authorization code for tokens")
-		c.JSON(http.StatusBadGateway, gin.H{"status": "error", "error": "failed to exchange authorization code for tokens"})
-		return
-	}
-
-	record := buildCodexOAuthRecord(bundle)
-	if _, errSave := h.saveTokenRecord(c.Request.Context(), record); errSave != nil {
-		_ = SetOAuthSessionError(state, "Failed to save authentication tokens")
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to save authentication tokens"})
-		return
-	}
-	if errUpsert := h.upsertManagedAuth(c.Request.Context(), record); errUpsert != nil {
-		_ = SetOAuthSessionError(state, "Failed to activate authentication tokens")
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to activate authentication tokens"})
-		return
-	}
-	if errComplete := CompleteOAuthSessionWithAuthFile(state, record.FileName); errComplete != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to finalize oauth session"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "auth_file": record.FileName})
+	c.JSON(http.StatusOK, response)
 }

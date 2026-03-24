@@ -250,6 +250,13 @@ func TestPatchAuthFile_PreservesPriorityZero(t *testing.T) {
 func TestCreateOAuthSession_StaticModeReturnsOAuthStartPayload(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
+	oldForwarderFactory := startOAuthCallbackServer
+	defer func() { startOAuthCallbackServer = oldForwarderFactory }()
+	startOAuthCallbackServer = func(port int, targetBase string) (*callbackForwarder, error) {
+		done := make(chan struct{})
+		close(done)
+		return &callbackForwarder{done: done}, nil
+	}
 
 	authDir := t.TempDir()
 	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: authDir}, nil)
@@ -257,7 +264,7 @@ func TestCreateOAuthSession_StaticModeReturnsOAuthStartPayload(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/v0/management/oauth-sessions", bytes.NewBufferString(`{"provider":"codex","callback_origin":"http://127.0.0.1:5173"}`))
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/v0/management/oauth-sessions", bytes.NewBufferString(`{"provider":"codex"}`))
 	req.Header.Set("Content-Type", "application/json")
 	ctx.Request = req
 	h.CreateOAuthSession(ctx)
@@ -285,7 +292,7 @@ func TestPostOAuthSessionCallback_DoesNotWriteCallbackFile(t *testing.T) {
 
 	authDir := t.TempDir()
 	state := "state-123"
-	if err := RegisterOAuthSessionWithRedirect(state, "codex", "http://127.0.0.1:5173/codex/callback", &codex.PKCECodes{CodeVerifier: "verifier", CodeChallenge: "challenge"}); err != nil {
+	if err := RegisterOAuthSessionWithRedirect(state, "codex", codex.RedirectURI, &codex.PKCECodes{CodeVerifier: "verifier", CodeChallenge: "challenge"}); err != nil {
 		t.Fatalf("failed to register oauth session: %v", err)
 	}
 	defer RemoveOAuthSession(state)

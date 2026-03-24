@@ -133,6 +133,21 @@ func TestManagementRetainedRouteIgnoresManagementPasswordEnv(t *testing.T) {
 	}
 }
 
+func TestOAuthCallbackRouteIsAccessibleWithoutAuthorization(t *testing.T) {
+	server := newTestServer(t, nil)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback", nil)
+	server.engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected oauth callback route status %d, got %d with body %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/html") {
+		t.Fatalf("expected oauth callback route to return html, got %q", got)
+	}
+}
+
 func TestManagementRemovedRoutesAreNotMounted(t *testing.T) {
 	server := newTestServer(t, nil)
 	routes := mountedRouteSet(server)
@@ -194,6 +209,7 @@ func TestManagementRetainedRoutesRemainMounted(t *testing.T) {
 		routeKey(http.MethodPost, "/v0/management/oauth-sessions"),
 		routeKey(http.MethodGet, "/v0/management/oauth-sessions/:state"),
 		routeKey(http.MethodPost, "/v0/management/oauth-sessions/:state/callback"),
+		routeKey(http.MethodGet, "/auth/callback"),
 	}
 
 	for _, route := range retainedRoutes {

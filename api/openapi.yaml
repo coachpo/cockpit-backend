@@ -158,14 +158,11 @@ components:
 
     OAuthSessionCreateRequest:
       type: object
-      required: [provider, callback_origin]
+      required: [provider]
       properties:
         provider:
           type: string
           enum: [codex]
-        callback_origin:
-          type: string
-          format: uri
 
     OAuthSessionCreateResponse:
       type: object
@@ -213,6 +210,9 @@ components:
         redirect_url:
           type: string
           format: uri
+
+    HTMLPage:
+      type: string
 
 paths:
   /runtime-settings:
@@ -416,7 +416,8 @@ paths:
 
   /oauth-sessions:
     post:
-      summary: Start a frontend-owned OAuth session
+      summary: Start a backend-owned OAuth session
+      description: Creates an OAuth session and returns a provider authorization URL that redirects back to the backend callback endpoint.
       requestBody:
         required: true
         content:
@@ -431,11 +432,80 @@ paths:
               schema:
                 $ref: '#/components/schemas/OAuthSessionCreateResponse'
         '400':
-          description: Invalid callback origin or provider
+          description: Invalid provider or request origin
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/callback:
+    servers:
+      - url: /
+        description: Backend callback origin
+    get:
+      summary: Complete the backend-owned OAuth callback
+      description: Primary OAuth popup callback endpoint. The frontend should continue polling GET /v0/management/oauth-sessions/{state} for completion status.
+      parameters:
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: code
+          schema:
+            type: string
+        - in: query
+          name: error
+          schema:
+            type: string
+        - in: query
+          name: error_description
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML success or provider-error page for the popup window
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/HTMLPage'
+        '400':
+          description: Invalid callback parameters
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/HTMLPage'
+        '404':
+          description: OAuth session not found
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/HTMLPage'
+        '409':
+          description: OAuth session already completed or conflicted
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/HTMLPage'
+        '410':
+          description: OAuth session expired
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/HTMLPage'
+        '500':
+          description: Failed to finalize the OAuth session
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/HTMLPage'
+        '502':
+          description: Failed to exchange the authorization code for tokens
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/HTMLPage'
 
   /oauth-sessions/{state}:
     get:
@@ -468,7 +538,8 @@ paths:
 
   /oauth-sessions/{state}/callback:
     post:
-      summary: Receive callback data from the frontend-owned OAuth page
+      summary: Compatibility shim for legacy frontend-owned OAuth callback handoff
+      description: Temporary migration endpoint. The primary OAuth flow redirects providers to GET /auth/callback on the backend origin.
       parameters:
         - in: path
           name: state

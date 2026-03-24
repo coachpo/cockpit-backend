@@ -60,8 +60,12 @@ func TestOpenAPIDocMatchesRedesignedManagementSurface(t *testing.T) {
 		"/auth-files/{name}:",
 		"/auth-files/{name}/usage:",
 		"/oauth-sessions:",
+		"/auth/callback:",
 		"/oauth-sessions/{state}:",
 		"/oauth-sessions/{state}/callback:",
+		"Start a backend-owned OAuth session",
+		"Complete the backend-owned OAuth callback",
+		"Compatibility shim for legacy frontend-owned OAuth callback handoff",
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("expected %q in api/openapi.yaml", required)
@@ -152,13 +156,13 @@ func TestOpenAPIDocOAuthSessionSchemas(t *testing.T) {
 		t.Fatal("expected OAuthSessionCreateResponse schema after OAuthSessionCreateRequest in openapi")
 	}
 	createSection := text[createStart : createStart+createEnd]
-	for _, required := range []string{
-		"provider:",
-		"callback_origin:",
-	} {
+	for _, required := range []string{"provider:"} {
 		if !strings.Contains(createSection, required) {
 			t.Fatalf("expected %q in OAuthSessionCreateRequest schema: %s", required, createSection)
 		}
+	}
+	if strings.Contains(createSection, "callback_origin:") {
+		t.Fatalf("did not expect callback_origin in OAuthSessionCreateRequest schema: %s", createSection)
 	}
 
 	statusStart := strings.Index(text, "    OAuthSessionStatusResponse:\n")
@@ -177,5 +181,9 @@ func TestOpenAPIDocOAuthSessionSchemas(t *testing.T) {
 		if !strings.Contains(statusSection, required) {
 			t.Fatalf("expected %q in OAuthSessionStatusResponse schema: %s", required, statusSection)
 		}
+	}
+
+	if !strings.Contains(text, "/auth/callback:\n    servers:\n      - url: /") {
+		t.Fatalf("expected /auth/callback to override servers with the backend root origin: %s", text)
 	}
 }
