@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-03-23T15:48:02+02:00
-**Commit:** b0dbdde
+**Generated:** 2026-03-24T02:32:07+02:00
+**Commit:** 5bba078
 **Branch:** main
 
 ## OVERVIEW
@@ -22,7 +22,7 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 |- config.example.yaml  # config-key inventory
 |- .env.example         # env var starter file
 |- Dockerfile           # container build for the cockpit binary
-|- docker-compose.yml   # local Nacos + Cockpit stack
+|- docker-compose.yml   # local Nacos bootstrap service for backend dev/tests
 |- .sisyphus/plans/     # local planning notes used during deep work
 `- docs/                # gitignored scratch tree, not checked-in user docs
 ```
@@ -30,7 +30,7 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Start the binary | `cmd/cockpit/main.go` | flags, `.env` load, Nacos/static bootstrap, auth-dir resolution, and service handoff |
+| Start the binary | `cmd/cockpit/main.go` | flags, `.env` load, Nacos bootstrap, auth-dir resolution, and service handoff |
 | OpenAPI surface snapshot | `api/openapi.yaml`, `internal/api/openapi_surface_test.go` | trimmed API contract must stay aligned with the live management/router surface |
 | Service startup helpers | `internal/cmd/` | `StartService`, `StartServiceBackground`, and `cliproxy.NewBuilder` wiring |
 | Built-in request access wiring | `internal/access/` | reconciles config API keys into the `sdk/access` manager |
@@ -74,6 +74,7 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 ## COMMANDS
 ```bash
 go build -o test-output ./cmd/cockpit
+go vet ./...
 go test ./...
 go test ./internal/...
 go test ./sdk/...
@@ -119,9 +120,10 @@ docker compose up -d --remove-orphans
 - Recent cleanup commits removed placeholder auth providers, `sdk/cliproxy/usage`, `sdk/translator/builtin`, and legacy executor helpers like `cloak_*` and `user_id_cache.go`.
 
 ## NOTES
-- `cmd/cockpit/main.go` loads `.env`, resolves Nacos vs static config/auth stores, configures logging, resolves auth dir, registers access providers, then starts the proxy service.
+- `cmd/cockpit/main.go` loads `.env`, bootstraps config/auth through Nacos, configures logging, resolves auth dir, registers access providers, then starts the proxy service.
 - `Dockerfile` builds `cmd/cockpit` directly; keep container build path aligned with the binary directory.
-- `docker-compose.yml` defaults to the GHCR backend image published by the root `docker-images.yml` workflow; override `COCKPIT_IMAGE` only when intentionally testing a different image.
+- Backend CI under `.github/workflows/ci.yml` runs `gofmt`, `go vet ./...`, `go test ./...`, and a `./cmd/cockpit` build; keep root-level docs from duplicating that service-local pipeline.
+- `docker-compose.yml` provisions the local Nacos dependency only; use the root `start.sh` or `deploy/` stack when you need the backend and frontend running together.
 - `api/openapi.yaml` is intentionally narrower than older multi-provider surfaces; do not revive removed endpoints by copying stale docs.
 - `test/thinking_conversion_test.go` is intentionally large. Extend the existing matrix instead of starting parallel styles.
 - `test/nacos_integration_test.go` is a live smoke test gated by `COCKPIT_NACOS_SMOKE=1` plus Nacos credentials.

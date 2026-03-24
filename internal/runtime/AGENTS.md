@@ -3,15 +3,15 @@
 Parent: `internal/AGENTS.md`
 
 ## OVERVIEW
-Runtime execution layer. Most work lives in `executor/`, which bridges auth-selected clients to upstream provider behavior.
+Runtime execution layer. The checked-in runtime is currently the Codex execution bridge, and nearly all behavior lives in `executor/`.
 
 ## WHERE TO LOOK
-- `executor/`: provider runtime bridge and shared execution helpers.
+- `executor/`: Codex HTTP/websocket execution bridge plus shared proxy, logging, request-shaping, and usage helpers.
 
 ## LOCAL CONVENTIONS
 - Runtime behavior changes should preserve the contract expected by `sdk/cliproxy/auth` executors.
 - Prefer local runtime helpers over leaking execution details back into API handlers.
-- Keep provider transport, payload, proxy, and usage behavior inside executor helpers instead of scattering it across callers.
+- Keep Codex transport, payload, proxy, and usage behavior inside executor helpers instead of scattering it across callers.
 - Switch to `executor/AGENTS.md` for provider-execution specifics.
 
 ## CHECKS
