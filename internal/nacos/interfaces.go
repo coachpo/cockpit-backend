@@ -17,7 +17,6 @@ type AuthFileMetadata struct {
 	Note     string
 	Size     int64
 	ModTime  time.Time
-	Source   string
 }
 
 type ConfigSource interface {

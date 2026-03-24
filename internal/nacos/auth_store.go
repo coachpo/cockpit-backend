@@ -186,11 +186,10 @@ func (s *NacosAuthStore) ListMetadata(_ context.Context) ([]AuthFileMetadata, er
 			}
 		}
 		item := AuthFileMetadata{
-			ID:     id,
-			Name:   name,
-			Type:   strings.TrimSpace(stringValue(entry, "type")),
-			Email:  strings.TrimSpace(stringValue(entry, "email")),
-			Source: "nacos",
+			ID:    id,
+			Name:  name,
+			Type:  strings.TrimSpace(stringValue(entry, "type")),
+			Email: strings.TrimSpace(stringValue(entry, "email")),
 		}
 		if rawNote, ok := entry["note"].(string); ok {
 			item.Note = strings.TrimSpace(rawNote)

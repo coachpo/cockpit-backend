@@ -239,7 +239,6 @@ func (s *StaticAuthStore) ListMetadata(_ context.Context) ([]AuthFileMetadata, e
 			Email:   strings.TrimSpace(stringValue(metadata, "email")),
 			Size:    info.Size(),
 			ModTime: info.ModTime(),
-			Source:  "file",
 		}
 		if rawPriority, ok := metadata["priority"]; ok {
 			switch v := rawPriority.(type) {

@@ -66,7 +66,7 @@ func (s *memoryAuthStore) ListMetadata(_ context.Context) ([]nacos.AuthFileMetad
 		if item == nil {
 			continue
 		}
-		out = append(out, nacos.AuthFileMetadata{ID: item.ID, Name: item.FileName, Type: item.Provider, Email: item.Label, Source: "memory"})
+		out = append(out, nacos.AuthFileMetadata{ID: item.ID, Name: item.FileName, Type: item.Provider, Email: item.Label})
 	}
 	return out, nil
 }
@@ -154,7 +154,7 @@ func (s *recordingAuthStore) ListMetadata(_ context.Context) ([]nacos.AuthFileMe
 		if name == "" {
 			name = item.ID
 		}
-		meta := nacos.AuthFileMetadata{ID: item.ID, Name: name, Type: item.Provider, Email: item.Label, Source: "memory"}
+		meta := nacos.AuthFileMetadata{ID: item.ID, Name: name, Type: item.Provider, Email: item.Label}
 		if note, ok := item.Metadata["note"].(string); ok {
 			meta.Note = note
 		}
