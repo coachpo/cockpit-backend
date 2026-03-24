@@ -160,6 +160,9 @@ components:
         provider:
           type: string
           enum: [codex]
+        local_callback_helper:
+          type: boolean
+          description: When true, the caller owns localhost:1455 callback forwarding and the backend skips starting its local bridge.
 
     OAuthSessionCreateResponse:
       type: object

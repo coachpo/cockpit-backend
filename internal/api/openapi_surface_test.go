@@ -160,7 +160,7 @@ func TestOpenAPIDocOAuthSessionSchemas(t *testing.T) {
 		t.Fatal("expected OAuthSessionCreateResponse schema after OAuthSessionCreateRequest in openapi")
 	}
 	createSection := text[createStart : createStart+createEnd]
-	for _, required := range []string{"provider:"} {
+	for _, required := range []string{"provider:", "local_callback_helper:"} {
 		if !strings.Contains(createSection, required) {
 			t.Fatalf("expected %q in OAuthSessionCreateRequest schema: %s", required, createSection)
 		}
