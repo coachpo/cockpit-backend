@@ -35,5 +35,7 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-      - name: Build cockpit
-        run: go build -o /tmp/cockpit ./cmd/cockpit
+      - name: Build binaries
+        run: |
+          go build -o /tmp/cockpit ./cmd/cockpit
+          go build -o /tmp/cockpit-oauth-helper ./cmd/cockpit-oauth-helper
