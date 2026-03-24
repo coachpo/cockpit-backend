@@ -106,7 +106,7 @@ jobs:
           echo "asset_name=$asset_name" >> "$GITHUB_OUTPUT"
 
       - name: Upload packaged asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.package.outputs.asset_name }}
           path: dist/${{ steps.package.outputs.asset_name }}
