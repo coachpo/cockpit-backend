@@ -14,7 +14,7 @@ func TestPatchCodexKey_UpdatesRetainedFields(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{
+	h := NewHandlerWithoutPersistence(&config.Config{
 		CodexKey: []config.CodexKey{{
 			APIKey:     "existing-key",
 			BaseURL:    "https://example.invalid/v1",
@@ -61,7 +61,7 @@ func TestPatchCodexKey_MatchNormalizesStoredAPIKey(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{
+	h := NewHandlerWithoutPersistence(&config.Config{
 		CodexKey: []config.CodexKey{{
 			APIKey:   " existing-key ",
 			BaseURL:  "https://example.invalid/v1",
@@ -93,7 +93,7 @@ func TestDeleteCodexKey_NormalizesStoredAndRequestedAPIKey(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{
+	h := NewHandlerWithoutPersistence(&config.Config{
 		CodexKey: []config.CodexKey{{
 			APIKey:  " existing-key ",
 			BaseURL: "https://example.invalid/v1",
@@ -120,7 +120,7 @@ func TestPatchCodexKey_BlankBaseURLRejected(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{
+	h := NewHandlerWithoutPersistence(&config.Config{
 		CodexKey: []config.CodexKey{{
 			APIKey:  "existing-key",
 			BaseURL: "https://example.invalid/v1",
@@ -148,7 +148,7 @@ func TestPutCodexKeys_BlankBaseURLRejected(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{
+	h := NewHandlerWithoutPersistence(&config.Config{
 		CodexKey: []config.CodexKey{{
 			APIKey:  "existing-key",
 			BaseURL: "https://example.invalid/v1",
@@ -169,5 +169,28 @@ func TestPutCodexKeys_BlankBaseURLRejected(t *testing.T) {
 	}
 	if len(h.cfg.CodexKey) != 1 || h.cfg.CodexKey[0].APIKey != "existing-key" {
 		t.Fatalf("expected existing codex key to remain unchanged, got %#v", h.cfg.CodexKey)
+	}
+}
+
+func TestPutCodexKeys_ObjectEnvelopeRejected(t *testing.T) {
+	t.Setenv("MANAGEMENT_PASSWORD", "")
+	gin.SetMode(gin.TestMode)
+
+	h := NewHandlerWithoutPersistence(&config.Config{}, nil)
+	h.SetConfigSaver(func(*config.Config) error { return nil })
+
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	req := httptest.NewRequest(http.MethodPut, "/api/codex-api-key", bytes.NewBufferString(`{"payload":[{"api-key":"next-key","base-url":"https://example.invalid/v1"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	ctx.Request = req
+
+	h.PutCodexKeys(ctx)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d with body %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+	if len(h.cfg.CodexKey) != 0 {
+		t.Fatalf("expected codex keys to remain unchanged, got %#v", h.cfg.CodexKey)
 	}
 }

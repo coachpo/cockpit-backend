@@ -14,7 +14,6 @@ func TestConfigSchemaMatchesTrimmedSurface(t *testing.T) {
 	assertStructFieldsExactly(t, reflect.TypeOf(Config{}), []string{
 		"Host",
 		"Port",
-		"AuthDir",
 		"DisableCooling",
 		"RequestRetry",
 		"MaxRetryCredentials",

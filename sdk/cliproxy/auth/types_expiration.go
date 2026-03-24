@@ -9,8 +9,6 @@ import (
 )
 
 // ExpirationTime attempts to extract the credential expiration timestamp from metadata.
-// It inspects common keys such as "expired", "expire", "expires_at", and also
-// nested "token" objects to remain compatible with legacy auth file formats.
 func (a *Auth) ExpirationTime() (time.Time, bool) {
 	if a == nil {
 		return time.Time{}, false
@@ -36,7 +34,7 @@ func RegisterRefreshLeadProvider(provider string, factory func() *time.Duration)
 	refreshLeadMu.Unlock()
 }
 
-var expireKeys = [...]string{"expired", "expire", "expires_at", "expiresAt", "expiry", "expires"}
+var expireKeys = [...]string{"expired"}
 
 func expirationFromMap(meta map[string]any) (time.Time, bool) {
 	if meta == nil {
@@ -46,24 +44,6 @@ func expirationFromMap(meta map[string]any) (time.Time, bool) {
 		if v, ok := meta[key]; ok {
 			if ts, ok1 := parseTimeValue(v); ok1 {
 				return ts, true
-			}
-		}
-	}
-	for _, nestedKey := range []string{"token", "Token"} {
-		if nested, ok := meta[nestedKey]; ok {
-			switch val := nested.(type) {
-			case map[string]any:
-				if ts, ok1 := expirationFromMap(val); ok1 {
-					return ts, true
-				}
-			case map[string]string:
-				temp := make(map[string]any, len(val))
-				for k, v := range val {
-					temp[k] = v
-				}
-				if ts, ok1 := expirationFromMap(temp); ok1 {
-					return ts, true
-				}
 			}
 		}
 	}

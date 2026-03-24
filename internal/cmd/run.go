@@ -18,14 +18,9 @@ import (
 // StartService builds and runs the proxy service using the exported SDK.
 // It creates a new proxy service instance, sets up signal handling for graceful shutdown,
 // and starts the service with the provided configuration.
-//
-// Parameters:
-//   - cfg: The application configuration
-//   - configPath: The path to the configuration file
-func StartService(cfg *config.Config, configPath string, configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) {
+func StartService(cfg *config.Config, configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) {
 	builder := cliproxy.NewBuilder().
 		WithConfig(cfg).
-		WithConfigPath(configPath).
 		WithConfigSource(configSource).
 		WithAuthStore(authStore)
 
@@ -46,10 +41,9 @@ func StartService(cfg *config.Config, configPath string, configSource nacos.Conf
 
 // StartServiceBackground starts the proxy service in a background goroutine
 // and returns a cancel function for shutdown and a done channel.
-func StartServiceBackground(cfg *config.Config, configPath string, configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (cancel func(), done <-chan struct{}) {
+func StartServiceBackground(cfg *config.Config, configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (cancel func(), done <-chan struct{}) {
 	builder := cliproxy.NewBuilder().
 		WithConfig(cfg).
-		WithConfigPath(configPath).
 		WithConfigSource(configSource).
 		WithAuthStore(authStore)
 

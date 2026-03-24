@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -45,8 +46,7 @@ var (
 )
 
 type oauthSessionCreateRequest struct {
-	Provider            string `json:"provider"`
-	LocalCallbackHelper bool   `json:"local_callback_helper"`
+	Provider string `json:"provider"`
 }
 
 func buildBackendCallbackURL(origin *url.URL) (string, error) {
@@ -213,7 +213,13 @@ func (h *Handler) CreateOAuthSession(c *gin.Context) {
 	}
 
 	var req oauthSessionCreateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	if decoder.More() {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
@@ -233,13 +239,10 @@ func (h *Handler) CreateOAuthSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	var forwarder *callbackForwarder
-	if !req.LocalCallbackHelper {
-		forwarder, err = startOAuthCallbackServer(codexCallbackPort, backendCallbackURL)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start local callback listener"})
-			return
-		}
+	forwarder, err := startOAuthCallbackServer(codexCallbackPort, backendCallbackURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start local callback listener"})
+		return
 	}
 
 	pkceCodes, err := codex.GeneratePKCECodes()

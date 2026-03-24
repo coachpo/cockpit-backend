@@ -50,9 +50,6 @@ type Server struct {
 	// accessManager handles request authentication providers.
 	accessManager *sdkaccess.Manager
 
-	// configFilePath is the absolute path to the YAML config file for persistence.
-	configFilePath string
-
 	// currentPath is the absolute path to the current working directory.
 	currentPath string
 
@@ -86,7 +83,7 @@ type Server struct {
 //
 // Returns:
 //   - *Server: A new server instance
-func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdkaccess.Manager, configFilePath string, authStore nacos.WatchableAuthStore, opts ...ServerOption) *Server {
+func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdkaccess.Manager, authStore nacos.WatchableAuthStore, opts ...ServerOption) *Server {
 	optionState := &serverOptionConfig{}
 	for i := range opts {
 		opts[i](optionState)
@@ -110,19 +107,18 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	engine.Use(corsMiddleware())
 	wd, err := os.Getwd()
 	if err != nil {
-		wd = configFilePath
+		wd = "."
 	}
 
 	// Create server instance
 	s := &Server{
-		engine:         engine,
-		handlers:       handlers.NewBaseAPIHandlers(&cfg.SDKConfig, authManager),
-		cfg:            cfg,
-		accessManager:  accessManager,
-		configFilePath: configFilePath,
-		currentPath:    wd,
-		wsRoutes:       make(map[string]struct{}),
-		authStore:      authStore,
+		engine:        engine,
+		handlers:      handlers.NewBaseAPIHandlers(&cfg.SDKConfig, authManager),
+		cfg:           cfg,
+		accessManager: accessManager,
+		currentPath:   wd,
+		wsRoutes:      make(map[string]struct{}),
+		authStore:     authStore,
 	}
 	s.wsAuthEnabled.Store(cfg.WebsocketAuth)
 	// Save initial YAML snapshot
@@ -133,7 +129,7 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	}
 	auth.SetQuotaCooldownDisabled(cfg.DisableCooling)
 	// Initialize management handler
-	s.mgmt = managementHandlers.NewHandler(cfg, configFilePath, authManager, authStore)
+	s.mgmt = managementHandlers.NewHandler(cfg, authManager, authStore)
 	if optionState.configSaver != nil {
 		s.mgmt.SetConfigSaver(optionState.configSaver)
 	}
@@ -279,9 +275,6 @@ func corsMiddleware() gin.HandlerFunc {
 
 // (management handlers moved to internal/api/handlers/management)
 
-// AuthMiddleware returns a Gin middleware handler that authenticates requests
-// using the configured authentication providers. When no providers are available,
-// it allows all requests (legacy behaviour).
 func AuthMiddleware(manager *sdkaccess.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if manager == nil {

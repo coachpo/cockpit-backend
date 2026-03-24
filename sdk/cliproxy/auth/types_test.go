@@ -24,13 +24,52 @@ func TestToolPrefixDisabled(t *testing.T) {
 	}
 
 	a = &Auth{Metadata: map[string]any{"tool-prefix-disabled": true}}
-	if !a.ToolPrefixDisabled() {
-		t.Error("should return true with kebab-case key")
+	if a.ToolPrefixDisabled() {
+		t.Error("should ignore legacy kebab-case key")
 	}
 
 	a = &Auth{Metadata: map[string]any{"tool_prefix_disabled": false}}
 	if a.ToolPrefixDisabled() {
 		t.Error("should return false when set to false")
+	}
+}
+
+func TestDisableCoolingOverride_StrictKey(t *testing.T) {
+	a := &Auth{Metadata: map[string]any{"disable-cooling": true}}
+	if _, ok := a.DisableCoolingOverride(); ok {
+		t.Fatal("should ignore legacy disable-cooling key")
+	}
+
+	a.Metadata = map[string]any{"disable_cooling": true}
+	value, ok := a.DisableCoolingOverride()
+	if !ok || !value {
+		t.Fatalf("DisableCoolingOverride() = (%t, %t), want (true, true)", value, ok)
+	}
+}
+
+func TestRequestRetryOverride_StrictKey(t *testing.T) {
+	a := &Auth{Metadata: map[string]any{"request-retry": 3}}
+	if _, ok := a.RequestRetryOverride(); ok {
+		t.Fatal("should ignore legacy request-retry key")
+	}
+
+	a.Metadata = map[string]any{"request_retry": 3}
+	value, ok := a.RequestRetryOverride()
+	if !ok || value != 3 {
+		t.Fatalf("RequestRetryOverride() = (%d, %t), want (3, true)", value, ok)
+	}
+}
+
+func TestExpirationTime_StrictKey(t *testing.T) {
+	a := &Auth{Metadata: map[string]any{"expires_at": "2026-03-24T00:00:00Z"}}
+	if _, ok := a.ExpirationTime(); ok {
+		t.Fatal("should ignore legacy expiration keys")
+	}
+
+	a.Metadata = map[string]any{"expired": "2026-03-24T00:00:00Z"}
+	ts, ok := a.ExpirationTime()
+	if !ok || ts.IsZero() {
+		t.Fatalf("ExpirationTime() = (%v, %t), want non-zero timestamp and true", ts, ok)
 	}
 }
 

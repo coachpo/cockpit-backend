@@ -1,5 +1,4 @@
 # Full inventory of supported config keys.
-# For a runnable local config, start from config.starter.yaml instead.
 api-keys: []
 passthrough-headers: false
 streaming:
@@ -8,7 +7,6 @@ streaming:
 nonstream-keepalive-interval: 0
 host: ""
 port: 8317
-auth-dir: "./cockpit"
 disable-cooling: false
 request-retry: 3
 max-retry-credentials: 0

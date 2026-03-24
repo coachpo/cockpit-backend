@@ -13,12 +13,12 @@ Private implementation tree. API routing, config/auth backends, model registry, 
 - `cmd/`: service startup helpers and `cliproxy.NewBuilder` wiring used by `cmd/cockpit`.
 - `config/`: split config schema, load flow, and sanitization.
 - `logging/`: base logrus setup, Gin request logging, and request IDs.
-- `nacos/`: remote/static config and auth backends shared by bootstrap and watcher code.
+- `nacos/`: Nacos-backed config and auth stores shared by bootstrap and watcher code.
 - `registry/`: model catalog and live availability registry.
 - `runtime/executor/`: upstream execution bridge.
 - `thinking/`: unified reasoning config parsing and validation.
 - `translator/`: request/response translation matrix.
-- `util/`: auth-dir resolution, header masking, proxy helpers, and model/tool-name utilities.
+- `util/`: header masking, writable-path helpers, proxy helpers, and model/tool-name utilities.
 - `watcher/`: reload, synthesis, diff, dispatch.
 - `wsrelay/`: provider websocket relay manager and session lifecycle.
 

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/gin-gonic/gin"
 )
 
@@ -93,15 +94,7 @@ func (h *Handler) PutMaxRetryInterval(c *gin.Context) {
 }
 
 func normalizeRoutingStrategy(strategy string) (string, bool) {
-	normalized := strings.ToLower(strings.TrimSpace(strategy))
-	switch normalized {
-	case "", "round-robin", "roundrobin", "rr":
-		return "round-robin", true
-	case "fill-first", "fillfirst", "ff":
-		return "fill-first", true
-	default:
-		return "", false
-	}
+	return config.NormalizeRoutingStrategy(strategy)
 }
 
 // RoutingStrategy

@@ -1,11 +1,9 @@
 package synthesizer
 
 import (
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestNewStableIDGenerator(t *testing.T) {
@@ -101,33 +99,6 @@ func TestStableIDGenerator_NilReceiver(t *testing.T) {
 	}
 	if short != "000000000000" {
 		t.Errorf("expected 000000000000, got %q", short)
-	}
-}
-
-func TestSynthesizeAuthFile_PreservesRetainedMetadata(t *testing.T) {
-	authDir := t.TempDir()
-	auths := SynthesizeAuthFile(&SynthesisContext{
-		AuthDir:     authDir,
-		Now:         time.Unix(1, 0),
-		IDGenerator: NewStableIDGenerator(),
-	}, filepath.Join(authDir, "codex.json"), []byte(`{
-		"type":"codex",
-		"email":"user@example.com",
-		"prefix":"team-a"
-	}`))
-
-	if len(auths) != 1 {
-		t.Fatalf("expected 1 auth, got %d", len(auths))
-	}
-	auth := auths[0]
-	if got := auth.Prefix; got != "team-a" {
-		t.Fatalf("expected prefix team-a, got %q", got)
-	}
-	if got, want := len(auth.Attributes), 3; got != want {
-		t.Fatalf("expected only retained auth attributes, got %d: %#v", got, auth.Attributes)
-	}
-	if got := auth.Attributes["auth_kind"]; got != "oauth" {
-		t.Fatalf("expected auth_kind=oauth, got %q", got)
 	}
 }
 

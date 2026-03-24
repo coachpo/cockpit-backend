@@ -2,7 +2,6 @@ package management
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
-	"github.com/coachpo/cockpit-backend/internal/nacos"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/gin-gonic/gin"
 )
@@ -34,7 +32,7 @@ func TestDeleteAuthFile_UsesInjectedStoreIDWithoutFilesystemMutation(t *testing.
 		Provider: "codex",
 		Status:   coreauth.StatusActive,
 		Attributes: map[string]string{
-			"path": filePath,
+			managedStoreAttribute: "true",
 		},
 		Metadata: map[string]any{
 			"type":  "codex",
@@ -46,7 +44,7 @@ func TestDeleteAuthFile_UsesInjectedStoreIDWithoutFilesystemMutation(t *testing.
 	}
 
 	store := &recordingAuthStore{}
-	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: authDir}, manager)
+	h := NewHandlerWithoutPersistence(&config.Config{}, manager)
 	h.authStore = store
 
 	deleteRec := httptest.NewRecorder()
@@ -84,7 +82,6 @@ func TestDownloadAuthFile_UsesStoreReadByNameWithoutDisk(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
-	authDir := t.TempDir()
 	store := &recordingAuthStore{
 		items: map[string]*coreauth.Auth{
 			"download.json": {
@@ -96,7 +93,7 @@ func TestDownloadAuthFile_UsesStoreReadByNameWithoutDisk(t *testing.T) {
 			},
 		},
 	}
-	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: authDir}, nil)
+	h := NewHandlerWithoutPersistence(&config.Config{}, nil)
 	h.authStore = store
 
 	rec := httptest.NewRecorder()
@@ -114,11 +111,10 @@ func TestDownloadAuthFile_UsesStoreReadByNameWithoutDisk(t *testing.T) {
 	}
 }
 
-func TestListAuthFiles_UsesStoreMetadataWhenManagerUnavailable(t *testing.T) {
+func TestListAuthFiles_ManagerRequired(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	gin.SetMode(gin.TestMode)
 
-	authDir := t.TempDir()
 	store := &recordingAuthStore{
 		items: map[string]*coreauth.Auth{
 			"store-list.json": {
@@ -130,7 +126,7 @@ func TestListAuthFiles_UsesStoreMetadataWhenManagerUnavailable(t *testing.T) {
 			},
 		},
 	}
-	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: authDir}, nil)
+	h := NewHandlerWithoutPersistence(&config.Config{}, nil)
 	h.authStore = store
 
 	rec := httptest.NewRecorder()
@@ -139,82 +135,10 @@ func TestListAuthFiles_UsesStoreMetadataWhenManagerUnavailable(t *testing.T) {
 	ctx.Request = req
 	h.ListAuthFiles(ctx)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected list status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected list status %d, got %d with body %s", http.StatusServiceUnavailable, rec.Code, rec.Body.String())
 	}
-	var payload struct {
-		Items []struct {
-			Name           string `json:"name"`
-			Email          string `json:"email"`
-			Priority       int    `json:"priority"`
-			UsageAvailable bool   `json:"usage_available"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode auth files response: %v", err)
-	}
-	if len(payload.Items) != 1 {
-		t.Fatalf("expected one store-backed auth file, got %d (%s)", len(payload.Items), rec.Body.String())
-	}
-	item := payload.Items[0]
-	if item.Name != "store-list.json" || item.Email != "store-list@example.com" || item.Priority != 7 {
-		t.Fatalf("expected store metadata in list response, got %#v", item)
-	}
-	body := rec.Body.String()
-	if strings.Contains(body, "\"source\"") {
-		t.Fatalf("did not expect source in list response, got %s", body)
-	}
-	if strings.Contains(body, "hello") || strings.Contains(body, "team-a") {
-		t.Fatalf("did not expect prefix/note in list response, got %s", body)
-	}
-}
-
-func TestDeleteAuthFile_StaticModeRejectsBeforeFilesystemMutation(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "")
-	gin.SetMode(gin.TestMode)
-
-	authDir := t.TempDir()
-	fileName := "readonly-user.json"
-	filePath := filepath.Join(authDir, fileName)
-	if errWrite := os.WriteFile(filePath, []byte(`{"type":"codex"}`), 0o600); errWrite != nil {
-		t.Fatalf("failed to write auth file: %v", errWrite)
-	}
-
-	manager := coreauth.NewManager(nil, nil, nil)
-	if _, errRegister := manager.Register(context.Background(), &coreauth.Auth{
-		ID:       fileName,
-		FileName: fileName,
-		Provider: "codex",
-		Status:   coreauth.StatusActive,
-		Attributes: map[string]string{
-			"path": filePath,
-		},
-		Metadata: map[string]any{"type": "codex"},
-	}); errRegister != nil {
-		t.Fatalf("failed to register auth record: %v", errRegister)
-	}
-
-	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: authDir}, manager)
-	h.authStore = nacos.NewStaticAuthStore(authDir)
-
-	deleteRec := httptest.NewRecorder()
-	deleteCtx, _ := gin.CreateTestContext(deleteRec)
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/auth-files/"+fileName, nil)
-	deleteCtx.Request = deleteReq
-	deleteCtx.Params = gin.Params{{Key: "name", Value: fileName}}
-	h.DeleteAuthFile(deleteCtx)
-
-	if deleteRec.Code != http.StatusOK {
-		t.Fatalf("expected delete status %d, got %d with body %s", http.StatusOK, deleteRec.Code, deleteRec.Body.String())
-	}
-	if _, errStat := os.Stat(filePath); !os.IsNotExist(errStat) {
-		t.Fatalf("expected auth file to be deleted from disk, stat err: %v", errStat)
-	}
-	updated, ok := manager.GetByID(fileName)
-	if !ok {
-		t.Fatalf("expected auth to remain registered after delete for runtime disablement")
-	}
-	if !updated.Disabled || updated.Status != coreauth.StatusDisabled {
-		t.Fatalf("expected auth to be disabled after delete, got %+v", updated)
+	if !strings.Contains(rec.Body.String(), "core auth manager unavailable") {
+		t.Fatalf("expected core auth manager unavailable error, got %s", rec.Body.String())
 	}
 }

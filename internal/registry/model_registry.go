@@ -54,9 +54,6 @@ type ModelInfo struct {
 	// This is optional and currently used for Gemini thinking budget normalization.
 	Thinking *ThinkingSupport `json:"thinking,omitempty"`
 
-	// UserDefined indicates this model was defined through config file's models[]
-	// array (e.g., codex-api-key.models[]).
-	// UserDefined models have thinking configuration passed through without validation.
 	UserDefined bool `json:"-"`
 }
 

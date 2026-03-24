@@ -53,8 +53,7 @@ type OAuthHelperOptions struct {
 }
 
 type oauthHelperSessionCreateRequest struct {
-	Provider            string `json:"provider"`
-	LocalCallbackHelper bool   `json:"local_callback_helper"`
+	Provider string `json:"provider"`
 }
 
 type oauthHelperSessionCreateResponse struct {
@@ -284,8 +283,7 @@ func composeOAuthHelperTargetURL(target, suffix string) string {
 
 func startOAuthHelperSession(ctx context.Context, client *http.Client, target, provider string) (*oauthHelperSessionCreateResponse, error) {
 	requestBody, err := json.Marshal(oauthHelperSessionCreateRequest{
-		Provider:            provider,
-		LocalCallbackHelper: true,
+		Provider: provider,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%s: encode oauth session request: %w", oauthCallbackForwardErrorPrefix, err)

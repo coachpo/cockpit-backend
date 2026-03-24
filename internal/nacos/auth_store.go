@@ -60,6 +60,10 @@ func (s *NacosAuthStore) Save(_ context.Context, auth *coreauth.Auth) (string, e
 	if id == "" {
 		return "", fmt.Errorf("nacos auth store: auth id is empty")
 	}
+	entry := authToEntry(auth)
+	if _, err := requiredAuthFileName(entry, id); err != nil {
+		return "", err
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -69,7 +73,7 @@ func (s *NacosAuthStore) Save(_ context.Context, auth *coreauth.Auth) (string, e
 		return "", err
 	}
 
-	entries[id] = authToEntry(auth)
+	entries[id] = entry
 	raw, err := marshalAuthEntries(entries)
 	if err != nil {
 		return "", err
@@ -157,14 +161,11 @@ func (s *NacosAuthStore) ReadByName(_ context.Context, name string) ([]byte, err
 		return nil, err
 	}
 	for id, entry := range entries {
-		fileName := strings.TrimSpace(stringValue(entry, "file_name"))
-		if fileName == "" {
-			fileName = id
-			if !strings.HasSuffix(strings.ToLower(fileName), ".json") {
-				fileName += ".json"
-			}
+		fileName, errFileName := requiredAuthFileName(entry, id)
+		if errFileName != nil {
+			return nil, errFileName
 		}
-		if fileName == name || id == name {
+		if fileName == name {
 			return json.MarshalIndent(entry, "", "  ")
 		}
 	}
@@ -178,12 +179,9 @@ func (s *NacosAuthStore) ListMetadata(_ context.Context) ([]AuthFileMetadata, er
 	}
 	items := make([]AuthFileMetadata, 0, len(entries))
 	for id, entry := range entries {
-		name := strings.TrimSpace(stringValue(entry, "file_name"))
-		if name == "" {
-			name = id
-			if !strings.HasSuffix(strings.ToLower(name), ".json") {
-				name += ".json"
-			}
+		name, errName := requiredAuthFileName(entry, id)
+		if errName != nil {
+			return nil, errName
 		}
 		item := AuthFileMetadata{
 			ID:    id,

@@ -1,13 +1,11 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestLoadConfigRejectsUnknownRemovedKeys(t *testing.T) {
+func TestParseConfigYAMLRejectsUnknownRemovedKeys(t *testing.T) {
 	tests := []struct {
 		name    string
 		yaml    string
@@ -37,14 +35,9 @@ func TestLoadConfigRejectsUnknownRemovedKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			configPath := filepath.Join(t.TempDir(), "config.yaml")
-			if err := os.WriteFile(configPath, []byte(tt.yaml), 0o600); err != nil {
-				t.Fatalf("write config: %v", err)
-			}
-
-			_, err := LoadConfig(configPath)
+			_, err := ParseConfigYAML([]byte(tt.yaml))
 			if err == nil {
-				t.Fatal("expected LoadConfig to reject unknown key")
+				t.Fatal("expected ParseConfigYAML to reject unknown key")
 			}
 			if !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
@@ -53,18 +46,23 @@ func TestLoadConfigRejectsUnknownRemovedKeys(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsCodexKeyWithoutBaseURL(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "config.yaml")
+func TestParseConfigYAMLRejectsCodexKeyWithoutBaseURL(t *testing.T) {
 	yaml := "port: 8080\ncodex-api-key:\n  - api-key: test\n    base-url: \"   \"\n"
-	if err := os.WriteFile(configPath, []byte(yaml), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	_, err := LoadConfig(configPath)
+	_, err := ParseConfigYAML([]byte(yaml))
 	if err == nil {
-		t.Fatal("expected LoadConfig to reject codex key without base-url")
+		t.Fatal("expected ParseConfigYAML to reject codex key without base-url")
 	}
 	if !strings.Contains(err.Error(), "codex-api-key") {
 		t.Fatalf("expected error mentioning codex-api-key, got %v", err)
+	}
+}
+
+func TestParseConfigYAMLRejectsLegacyRoutingStrategy(t *testing.T) {
+	_, err := ParseConfigYAML([]byte("routing:\n  strategy: fillfirst\n"))
+	if err == nil {
+		t.Fatal("expected ParseConfigYAML to reject legacy routing strategy")
+	}
+	if !strings.Contains(err.Error(), "routing.strategy") {
+		t.Fatalf("expected routing.strategy error, got %v", err)
 	}
 }

@@ -1,5 +1,4 @@
 // Package main provides the entry point for the Cockpit server.
-// This server acts as a Nacos-first OpenAI-compatible proxy for Cockpit runtime auth and routing.
 package main
 
 import (
@@ -8,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	configaccess "github.com/coachpo/cockpit-backend/internal/access/config_access"
@@ -20,11 +18,8 @@ import (
 	_ "github.com/coachpo/cockpit-backend/internal/translator"
 	"github.com/coachpo/cockpit-backend/internal/util"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 )
-
-const configPathUsage = "Runtime config path for internal bookkeeping (defaults to ./cockpit/config.yaml; configuration is loaded from Nacos)"
 
 const (
 	hostUsage = "HTTP host override for the management server listener"
@@ -32,11 +27,10 @@ const (
 )
 
 type commandOptions struct {
-	configPath string
-	host       string
-	hostSet    bool
-	port       int
-	portSet    bool
+	host    string
+	hostSet bool
+	port    int
+	portSet bool
 }
 
 // init initializes the shared logger setup.
@@ -50,7 +44,6 @@ func newCommandFlagSet(name string, options *commandOptions) *flag.FlagSet {
 	}
 
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.StringVar(&options.configPath, "config", "", configPathUsage)
 	fs.StringVar(&options.host, "host", "", hostUsage)
 	fs.IntVar(&options.port, "port", 0, portUsage)
 	fs.Usage = func() {
@@ -94,7 +87,6 @@ func parseCommandArgs(name string, args []string) (commandOptions, error) {
 		return commandOptions{}, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
 
-	options.configPath = strings.TrimSpace(options.configPath)
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "host":
@@ -143,8 +135,8 @@ func applyRuntimeOverrides(cfg *config.Config, options commandOptions) error {
 
 type bootstrapConfig struct {
 	cfg          *config.Config
-	configSource nacos.ConfigSource
-	authStore    nacos.WatchableAuthStore
+	configSource *nacos.NacosConfigStore
+	authStore    *nacos.NacosAuthStore
 }
 
 type bootstrapLoaders struct {
@@ -166,7 +158,7 @@ func resolveBootstrapConfig(loaders bootstrapLoaders) (*bootstrapConfig, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to bootstrap from nacos: %w", err)
 	}
-	if err := validateBootstrapConfig("nacos", loaded); err != nil {
+	if err := validateNacosBootstrapConfig(loaded); err != nil {
 		return nil, fmt.Errorf("failed to bootstrap from nacos: %w", err)
 	}
 	return loaded, nil
@@ -183,9 +175,36 @@ func loadNacosBootstrapConfig() (*bootstrapConfig, error) {
 
 	configSource := nacos.NewNacosConfigStore(client)
 	authStore := nacos.NewNacosAuthStore(client)
-	cfg, err := configSource.LoadConfig()
+
+	return bootstrapFromNacosStores(configSource, authStore, configSource.LoadConfig, authStore.List)
+
+}
+
+func bootstrapFromNacosStores(
+	configSource *nacos.NacosConfigStore,
+	authStore *nacos.NacosAuthStore,
+	loadConfig func() (*config.Config, error),
+	loadAuths func(context.Context) ([]*coreauth.Auth, error),
+) (*bootstrapConfig, error) {
+	if configSource == nil {
+		return nil, fmt.Errorf("nacos bootstrap requires a config source")
+	}
+	if authStore == nil {
+		return nil, fmt.Errorf("nacos bootstrap requires an auth store")
+	}
+	if loadConfig == nil {
+		return nil, fmt.Errorf("nacos bootstrap requires a config loader")
+	}
+	if loadAuths == nil {
+		return nil, fmt.Errorf("nacos bootstrap requires an auth loader")
+	}
+
+	cfg, err := loadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("load config from nacos: %w", err)
+	}
+	if _, err = loadAuths(context.Background()); err != nil {
+		return nil, fmt.Errorf("load auths from nacos: %w", err)
 	}
 
 	return &bootstrapConfig{
@@ -195,18 +214,18 @@ func loadNacosBootstrapConfig() (*bootstrapConfig, error) {
 	}, nil
 }
 
-func validateBootstrapConfig(sourceName string, loaded *bootstrapConfig) error {
+func validateNacosBootstrapConfig(loaded *bootstrapConfig) error {
 	if loaded == nil {
-		return fmt.Errorf("%s bootstrap returned nil result", sourceName)
+		return fmt.Errorf("nacos bootstrap returned nil result")
 	}
 	if loaded.configSource == nil {
-		return fmt.Errorf("%s bootstrap returned nil config source", sourceName)
+		return fmt.Errorf("nacos bootstrap returned nil config source")
 	}
 	if loaded.authStore == nil {
-		return fmt.Errorf("%s bootstrap returned nil auth store", sourceName)
+		return fmt.Errorf("nacos bootstrap returned nil auth store")
 	}
 	if loaded.cfg == nil {
-		return fmt.Errorf("%s bootstrap returned nil config", sourceName)
+		return fmt.Errorf("nacos bootstrap returned nil config")
 	}
 	return nil
 }
@@ -223,28 +242,9 @@ func main() {
 		log.Errorf("failed to parse command line flags: %v", parseErr)
 		os.Exit(2)
 	}
-	configFilePath := options.configPath
 
 	// Core application variables.
 	var err error
-
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Errorf("failed to get working directory: %v", err)
-		return
-	}
-
-	// Load environment variables from .env if present.
-	if errLoad := godotenv.Load(filepath.Join(wd, ".env")); errLoad != nil {
-		if !errors.Is(errLoad, os.ErrNotExist) {
-			log.WithError(errLoad).Warn("failed to load .env file")
-		}
-	}
-
-	// Determine and load the configuration file.
-	if configFilePath == "" {
-		configFilePath = filepath.Join(wd, "cockpit", "config.yaml")
-	}
 
 	loaded, err := resolveBootstrapConfig(bootstrapLoaders{nacosAddr: os.Getenv("NACOS_ADDR")})
 	if err != nil {
@@ -269,21 +269,10 @@ func main() {
 	// Set the log level based on the configuration.
 	util.SetLogLevel(cfg)
 
-	configMode := ""
-	if configSource != nil {
-		configMode = configSource.Mode()
-	}
-	if resolvedAuthDir, errResolveAuthDir := util.ResolveRuntimeAuthDir(cfg.AuthDir, configMode); errResolveAuthDir != nil {
-		log.Errorf("failed to resolve auth directory: %v", errResolveAuthDir)
-		return
-	} else {
-		cfg.AuthDir = resolvedAuthDir
-	}
-
 	// Register built-in access providers before constructing services.
 	configaccess.Register(&cfg.SDKConfig)
 
 	// Start the main proxy service
 	registry.StartModelsUpdater(context.Background())
-	cmd.StartService(cfg, configFilePath, configSource, authStore)
+	cmd.StartService(cfg, configSource, authStore)
 }

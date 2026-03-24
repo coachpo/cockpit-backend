@@ -18,7 +18,7 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 |- internal/            # private runtime, management, logging, utility, watcher, and relay code
 |- sdk/                 # embeddable public surface
 |- test/                # cross-subsystem matrices
-|- temp/                # tracked runtime and QA artifacts under `temp/stats/`, `temp/qa-auths/`, and top-level bootstrap files
+|- temp/                # tracked runtime and QA artifacts under `temp/stats/` and `temp/cockpit-validation`
 |- config.example.yaml  # config-key inventory
 |- .env.example         # env var starter file
 |- Dockerfile           # container build for the cockpit binary
@@ -30,18 +30,18 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Start the binary | `cmd/cockpit/main.go` | flags, `.env` load, Nacos bootstrap, auth-dir resolution, and service handoff |
+| Start the binary | `cmd/cockpit/main.go` | flags, strict Nacos-only bootstrap, and service handoff |
 | OpenAPI surface snapshot | `api/openapi.yaml`, `internal/api/openapi_surface_test.go` | trimmed API contract must stay aligned with the live management/router surface |
 | Service startup helpers | `internal/cmd/` | `StartService`, `StartServiceBackground`, and `cliproxy.NewBuilder` wiring |
 | Built-in request access wiring | `internal/access/` | reconciles config API keys into the `sdk/access` manager |
-| Config/auth backends | `internal/nacos/` | remote Nacos stores plus static file-backed fallbacks |
+| Config/auth backends | `internal/nacos/` | Nacos-backed config and auth stores |
 | HTTP routing + management | `internal/api/` | `server.go` plus `server_management.go`, keepalive, update, and route-option glue |
 | Management persistence APIs | `internal/api/handlers/management/` | config edits, auth files, Codex list endpoints, quota toggles, OAuth callbacks |
 | Provider auth implementation | `internal/auth/codex/` | Codex OAuth, local callback server, PKCE, JWT parsing, and credential filenames |
 | Request logging | `internal/logging/` | base logger, Gin middleware, request IDs |
 | Shared internal contracts | `internal/interfaces/` | handler and client-model interfaces reused across handlers and tests |
 | Small internal support leaves | `internal/browser/`, `internal/constant/`, `internal/misc/` | browser launch, provider constants, callback parsing, and focused helpers |
-| Proxy/auth utility helpers | `internal/util/` | auth-dir resolution, masking, proxy helpers, model/tool-name helpers |
+| Proxy/auth utility helpers | `internal/util/` | masking, writable-path helpers, proxy helpers, model/tool-name helpers |
 | Config lifecycle | `internal/config/` | split schema, load, and sanitization flow |
 | Model catalog | `internal/registry/` | dynamic registry plus embedded catalog lookup |
 | Hot reload | `internal/watcher/` | reload, synthesis, diff, dispatch |
@@ -57,12 +57,11 @@ Read the nearest `AGENTS.md` first. Child files are deltas for their folder, not
 ## CODE MAP
 | Symbol | Location | Role |
 |--------|----------|------|
-| `main` | `cmd/cockpit/main.go` | CLI entrypoint, env/config bootstrap |
+| `main` | `cmd/cockpit/main.go` | CLI entrypoint, Nacos bootstrap |
 | `StartService` | `internal/cmd/run.go` | service assembly, signal handling, keep-alive shutdown hook |
 | `access.ApplyAccessProviders` | `internal/access/reconcile.go` | reconciles config-backed request auth providers into `sdk/access` |
 | `NewServer` | `internal/api/server.go` | Gin engine, middleware, route setup, management enablement |
 | `logging.SetupBaseLogger` | `internal/logging/global_logger.go` | shared logrus + Gin writer bootstrap |
-| `util.ResolveAuthDir` | `internal/util/util.go` | auth-dir normalization shared by bootstrap and logging |
 | `(*NacosConfigStore).SaveConfig` | `internal/nacos/config_store.go` | Nacos-backed config persistence path |
 | `nacos.NewClientFromEnv` | `internal/nacos/client.go` | env-driven remote config/auth bootstrap |
 | `GetGlobalRegistry` | `internal/registry/model_registry.go` | global model availability registry |
@@ -109,7 +108,7 @@ docker compose up -d --remove-orphans
 - Translators register through blank imports and leaf `init.go` files.
 - Executors mutate raw JSON with `gjson` and `sjson` instead of deep struct graphs.
 - Watcher diffs prefer redacted summaries and hashes over secret-bearing values.
-- Nacos backends and static file stores share the same config/auth interfaces.
+- Nacos-backed config/auth stores share the same config/auth interfaces used by bootstrap, management, and watcher wiring.
 - Websocket relay traffic moves through typed message envelopes keyed by request ID.
 
 ## STALE OR PRUNED AREAS
@@ -120,7 +119,7 @@ docker compose up -d --remove-orphans
 - Recent cleanup commits removed placeholder auth providers, `sdk/cliproxy/usage`, `sdk/translator/builtin`, and legacy executor helpers like `cloak_*` and `user_id_cache.go`.
 
 ## NOTES
-- `cmd/cockpit/main.go` loads `.env`, bootstraps config/auth through Nacos, configures logging, resolves auth dir, registers access providers, then starts the proxy service.
+- `cmd/cockpit/main.go` bootstraps config/auth only through Nacos, exits on Nacos bootstrap failure, configures logging, registers access providers, then starts the proxy service.
 - `Dockerfile` builds `cmd/cockpit` directly; keep container build path aligned with the binary directory.
 - Backend CI under `.github/workflows/ci.yml` runs `gofmt`, `go vet ./...`, `go test ./...`, and a `./cmd/cockpit` build; keep root-level docs from duplicating that service-local pipeline.
 - `docker-compose.yml` provisions the local Nacos dependency only; use the root `start.sh` or `deploy/` stack when you need the backend and frontend running together.
@@ -128,4 +127,4 @@ docker compose up -d --remove-orphans
 - `test/thinking_conversion_test.go` is intentionally large. Extend the existing matrix instead of starting parallel styles.
 - `test/nacos_integration_test.go` is a live smoke test gated by `COCKPIT_NACOS_SMOKE=1` plus Nacos credentials.
 - `internal/wsrelay/` is wired from `sdk/cliproxy/service.go`; keep relay work scoped there instead of reviving removed API scaffolding.
-- `temp/stats/`, `temp/qa-auths/`, `temp/qa-config.yaml`, `temp/auth-credentials-upload.json`, and `temp/cockpit-validation` are tracked runtime/QA artifacts, not source.
+- `temp/stats/` and `temp/cockpit-validation` are tracked runtime/QA artifacts, not source.

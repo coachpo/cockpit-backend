@@ -3,8 +3,6 @@ package nacos
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 
@@ -12,6 +10,16 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 )
+
+func stringValue(metadata map[string]any, key string) string {
+	if len(metadata) == 0 || key == "" {
+		return ""
+	}
+	if value, ok := metadata[key].(string); ok {
+		return value
+	}
+	return ""
+}
 
 func authFromEntry(id string, entry map[string]any) *coreauth.Auth {
 	provider, _ := entry["type"].(string)
@@ -111,72 +119,50 @@ func parseAuthEntries(raw string) (map[string]map[string]any, error) {
 	}
 
 	entries := make(map[string]map[string]any)
-	if err := json.Unmarshal([]byte(raw), &entries); err == nil {
-		if entries == nil {
-			return map[string]map[string]any{}, nil
-		}
-		return entries, nil
-	}
-
-	var list []map[string]any
-	if err := json.Unmarshal([]byte(raw), &list); err != nil {
+	if err := json.Unmarshal([]byte(raw), &entries); err != nil {
 		return nil, err
 	}
-	return authEntriesFromList(list)
-}
-
-func authEntriesFromList(list []map[string]any) (map[string]map[string]any, error) {
-	entries := make(map[string]map[string]any, len(list))
-	for idx, entry := range list {
-		entryID, err := authEntryIDFromListItem(idx, entry)
+	if entries == nil {
+		return map[string]map[string]any{}, nil
+	}
+	normalized := make(map[string]map[string]any, len(entries))
+	for id, entry := range entries {
+		normalizedID, err := normalizeExplicitAuthEntryID(id)
 		if err != nil {
+			return nil, fmt.Errorf("nacos auth store: invalid auth id %q: %w", id, err)
+		}
+		if _, err := requiredAuthFileName(entry, normalizedID); err != nil {
 			return nil, err
 		}
-		if _, exists := entries[entryID]; exists {
-			return nil, fmt.Errorf("nacos auth store: duplicate auth id %q in list payload", entryID)
+		if _, exists := normalized[normalizedID]; exists {
+			return nil, fmt.Errorf("nacos auth store: duplicate auth id %q", normalizedID)
 		}
-		entries[entryID] = cloneAuthEntry(entry)
+		normalized[normalizedID] = cloneAuthEntry(entry)
 	}
-	return entries, nil
+	return normalized, nil
 }
 
-func authEntryIDFromListItem(index int, entry map[string]any) (string, error) {
-	if len(entry) == 0 {
-		return "", fmt.Errorf("nacos auth store: list entry %d is empty", index)
+func requiredAuthFileName(entry map[string]any, id string) (string, error) {
+	fileName := strings.TrimSpace(stringValue(entry, "file_name"))
+	if fileName == "" {
+		return "", fmt.Errorf("nacos auth store: auth %q is missing file_name", id)
 	}
-	if id := normalizeAuthEntryID(stringValue(entry, "id")); id != "" {
-		return id, nil
+	validated, err := normalizeExplicitAuthEntryID(fileName)
+	if err != nil {
+		return "", fmt.Errorf("nacos auth store: auth %q has invalid file_name: %w", id, err)
 	}
-	if fileName := normalizeAuthEntryID(stringValue(entry, "file_name")); fileName != "" {
-		return fileName, nil
-	}
-
-	provider := strings.ToLower(strings.TrimSpace(stringValue(entry, "type")))
-	if provider == "" {
-		provider = "auth"
-	}
-	if accountID := strings.TrimSpace(stringValue(entry, "account_id")); accountID != "" {
-		return normalizeAuthEntryID(provider + "-" + accountID + ".json"), nil
-	}
-	if email := strings.TrimSpace(stringValue(entry, "email")); email != "" {
-		return normalizeAuthEntryID(provider + "-" + email + ".json"), nil
-	}
-
-	return "", fmt.Errorf("nacos auth store: list entry %d must include id, file_name, account_id, or email", index)
+	return validated, nil
 }
 
-func normalizeAuthEntryID(value string) string {
+func normalizeExplicitAuthEntryID(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return ""
+		return "", nil
 	}
-	value = filepath.Base(value)
-	value = strings.ReplaceAll(value, `\`, "_")
-	value = strings.ReplaceAll(value, `/`, "_")
-	if runtime.GOOS == "windows" {
-		value = strings.ToLower(value)
+	if strings.Contains(value, "/") || strings.Contains(value, `\`) {
+		return "", fmt.Errorf("path separators are not allowed")
 	}
-	return value
+	return value, nil
 }
 
 func marshalAuthEntries(entries map[string]map[string]any) (string, error) {

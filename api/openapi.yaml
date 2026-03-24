@@ -160,9 +160,6 @@ components:
         provider:
           type: string
           enum: [codex]
-        local_callback_helper:
-          type: boolean
-          description: When true, the caller owns localhost:1455 callback forwarding and the backend skips starting its local bridge.
 
     OAuthSessionCreateResponse:
       type: object
@@ -193,23 +190,6 @@ components:
           type: string
         auth_file:
           type: string
-
-    OAuthSessionCallbackRequest:
-      type: object
-      required: [provider]
-      properties:
-        provider:
-          type: string
-          enum: [codex]
-        code:
-          type: string
-        error:
-          type: string
-        error_description:
-          type: string
-        redirect_url:
-          type: string
-          format: uri
 
     HTMLPage:
       type: string
@@ -531,48 +511,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '410':
           description: OAuth session expired
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /oauth-sessions/{state}/callback:
-    post:
-      summary: Compatibility shim for legacy frontend-owned OAuth callback handoff
-      description: Temporary migration endpoint. The primary OAuth flow redirects providers to GET /auth/callback on the backend origin.
-      parameters:
-        - in: path
-          name: state
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OAuthSessionCallbackRequest'
-      responses:
-        '200':
-          description: Callback accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusOk'
-        '400':
-          description: Invalid callback payload
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: OAuth session not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
-          description: OAuth session already completed or conflicted
           content:
             application/json:
               schema:

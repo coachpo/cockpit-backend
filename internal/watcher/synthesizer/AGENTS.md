@@ -3,11 +3,10 @@
 Parent: `internal/watcher/AGENTS.md`
 
 ## OVERVIEW
-Runtime auth synthesis layer. This folder turns config-backed and file-backed sources into `sdk/cliproxy/auth.Auth` entries for watcher dispatch.
+Runtime auth synthesis layer. This folder turns config-backed sources into `sdk/cliproxy/auth.Auth` entries for watcher dispatch.
 
 ## WHERE TO LOOK
 - `config.go`: config-backed auth generation.
-- `file.go`: file-backed auth synthesis.
 - `context.go`: synthesis inputs and clocks.
 - `helpers.go`, `interface.go`: shared helpers and contracts.
 

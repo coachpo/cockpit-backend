@@ -15,11 +15,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Handler aggregates config reference, persistence path and helpers.
 type Handler struct {
 	cfg             *config.Config
 	persistedConfig *config.Config
-	configFilePath  string
 	configSaver     func(*config.Config) error
 	mu              sync.Mutex
 	authManager     *coreauth.Manager
@@ -29,13 +27,12 @@ type Handler struct {
 }
 
 // NewHandler creates a new management handler instance.
-func NewHandler(cfg *config.Config, configFilePath string, manager *coreauth.Manager, store nacos.WatchableAuthStore) *Handler {
+func NewHandler(cfg *config.Config, manager *coreauth.Manager, store nacos.WatchableAuthStore) *Handler {
 	persistedConfig, _ := cloneConfig(cfg)
 
 	return &Handler{
 		cfg:             cfg,
 		persistedConfig: persistedConfig,
-		configFilePath:  configFilePath,
 		authManager:     manager,
 		authStore:       store,
 	}
@@ -43,11 +40,6 @@ func NewHandler(cfg *config.Config, configFilePath string, manager *coreauth.Man
 
 func (h *Handler) SetConfigSaver(saver func(*config.Config) error) {
 	h.configSaver = saver
-}
-
-// NewHandlerWithoutConfigFilePath creates a management handler without persistence wiring.
-func NewHandlerWithoutConfigFilePath(cfg *config.Config, manager *coreauth.Manager) *Handler {
-	return NewHandler(cfg, "", manager, nil)
 }
 
 // SetConfig updates the in-memory config reference when the server hot-reloads.
@@ -114,7 +106,7 @@ func (h *Handler) persist(c *gin.Context) bool {
 		if errClone == nil {
 			restoreConfigSnapshot(&h.cfg, snapshot)
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save config: %v", nacos.ErrStaticMode)})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config: config persistence unavailable"})
 		return false
 	}
 	if err := saver(h.cfg); err != nil {

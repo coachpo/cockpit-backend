@@ -4,7 +4,6 @@ import (
 	"errors"
 	"html"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -13,7 +12,6 @@ import (
 type oauthSessionCallbackRequest struct {
 	Provider         string `json:"provider"`
 	State            string `json:"state"`
-	RedirectURL      string `json:"redirect_url"`
 	Code             string `json:"code"`
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description"`
@@ -150,62 +148,4 @@ func (h *Handler) GetOAuthCallback(c *gin.Context) {
 		errMsg = strings.TrimSpace(c.Query("error"))
 	}
 	renderOAuthCallbackHTML(c, h.completeOAuthSession(c, c.Query("state"), "", c.Query("code"), errMsg))
-}
-
-func (h *Handler) PostOAuthSessionCallback(c *gin.Context) {
-	state, ok := oauthSessionStateParam(c)
-	if !ok {
-		return
-	}
-
-	var req oauthSessionCallbackRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid body"})
-		return
-	}
-
-	bodyState := strings.TrimSpace(req.State)
-	code := strings.TrimSpace(req.Code)
-	errMsg := strings.TrimSpace(req.ErrorDescription)
-	if errMsg == "" {
-		errMsg = strings.TrimSpace(req.Error)
-	}
-
-	if rawRedirect := strings.TrimSpace(req.RedirectURL); rawRedirect != "" {
-		parsed, errParse := url.Parse(rawRedirect)
-		if errParse != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid redirect_url"})
-			return
-		}
-		query := parsed.Query()
-		if bodyState == "" {
-			bodyState = strings.TrimSpace(query.Get("state"))
-		}
-		if code == "" {
-			code = strings.TrimSpace(query.Get("code"))
-		}
-		if errMsg == "" {
-			errMsg = strings.TrimSpace(query.Get("error_description"))
-			if errMsg == "" {
-				errMsg = strings.TrimSpace(query.Get("error"))
-			}
-		}
-	}
-
-	if bodyState != "" && bodyState != state {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "state does not match resource"})
-		return
-	}
-
-	result := h.completeOAuthSession(c, state, req.Provider, code, errMsg)
-	if result.StatusCode != http.StatusOK {
-		c.JSON(result.StatusCode, gin.H{"status": "error", "error": result.Error})
-		return
-	}
-
-	response := gin.H{"status": "ok"}
-	if strings.TrimSpace(result.AuthFile) != "" {
-		response["auth_file"] = result.AuthFile
-	}
-	c.JSON(http.StatusOK, response)
 }

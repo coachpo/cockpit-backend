@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +24,7 @@ type patchAuthFileRequest struct {
 }
 
 func (h *Handler) buildManagedAuthRecord(name string, data []byte) (*coreauth.Auth, error) {
-	name = strings.TrimSpace(filepath.Base(name))
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("invalid name")
 	}
@@ -281,10 +280,6 @@ func (h *Handler) disableAuth(ctx context.Context, id string) {
 		auth.Status = coreauth.StatusDisabled
 		auth.StatusMessage = "removed via management API"
 		auth.UpdatedAt = time.Now()
-		if auth.Attributes != nil {
-			delete(auth.Attributes, "path")
-			delete(auth.Attributes, "source")
-		}
 		_, _ = h.authManager.Update(coreauth.WithSkipPersist(ctx), auth)
 		syncManagedAuthModels(auth)
 	}

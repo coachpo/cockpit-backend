@@ -19,14 +19,13 @@ type Client struct {
 }
 
 // NewClientFromEnv creates a Nacos client from environment variables.
-// Returns nil if NACOS_ADDR is not set.
 // Env vars: NACOS_ADDR (host:port), NACOS_NAMESPACE (default "public"),
 // NACOS_USERNAME, NACOS_PASSWORD, NACOS_GROUP (default "DEFAULT_GROUP"),
 // NACOS_CACHE_DIR (default "/tmp/nacos/cache")
 func NewClientFromEnv() (*Client, error) {
 	addr := os.Getenv("NACOS_ADDR")
 	if addr == "" {
-		return nil, nil // Nacos not configured
+		return nil, fmt.Errorf("NACOS_ADDR is required")
 	}
 
 	host, portStr := parseHostPort(addr)
@@ -54,6 +53,7 @@ func NewClientFromEnv() (*Client, error) {
 	cc := constant.ClientConfig{
 		NamespaceId:         namespace,
 		TimeoutMs:           5000,
+		DisableUseSnapShot:  true,
 		NotLoadCacheAtStart: true,
 		CacheDir:            cacheDir,
 		LogDir:              "/tmp/nacos/log",
@@ -70,7 +70,7 @@ func NewClientFromEnv() (*Client, error) {
 		return nil, fmt.Errorf("nacos client init: %w", err)
 	}
 
-	log.Infof("nacos client connected to %s (namespace=%s, group=%s)", addr, namespace, group)
+	log.Infof("nacos client initialized for %s (namespace=%s, group=%s)", addr, namespace, group)
 	return &Client{configClient: configClient, group: group}, nil
 }
 

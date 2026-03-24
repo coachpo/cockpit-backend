@@ -3,11 +3,14 @@ package management
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 )
+
+var errStoreUnavailable = errors.New("store unavailable")
 
 type memoryAuthStore struct {
 	mu    sync.Mutex
@@ -54,7 +57,7 @@ func (s *memoryAuthStore) ReadByName(_ context.Context, name string) ([]byte, er
 	if item, ok := s.items[name]; ok && item != nil {
 		return json.Marshal(item.Metadata)
 	}
-	return nil, nacos.ErrStaticMode
+	return nil, errStoreUnavailable
 
 }
 
@@ -74,8 +77,6 @@ func (s *memoryAuthStore) ListMetadata(_ context.Context) ([]nacos.AuthFileMetad
 func (s *memoryAuthStore) Watch(_ context.Context, _ func([]*coreauth.Auth)) error { return nil }
 
 func (s *memoryAuthStore) StopWatch() {}
-
-func (s *memoryAuthStore) SetBaseDir(string) {}
 
 type recordingAuthStore struct {
 	mu        sync.Mutex
@@ -139,7 +140,7 @@ func (s *recordingAuthStore) ReadByName(_ context.Context, name string) ([]byte,
 			return json.Marshal(item.Metadata)
 		}
 	}
-	return nil, nacos.ErrStaticMode
+	return nil, errStoreUnavailable
 }
 
 func (s *recordingAuthStore) ListMetadata(_ context.Context) ([]nacos.AuthFileMetadata, error) {
@@ -191,17 +192,17 @@ type readonlyAuthStore struct{}
 func (s *readonlyAuthStore) List(context.Context) ([]*coreauth.Auth, error) { return nil, nil }
 
 func (s *readonlyAuthStore) Save(context.Context, *coreauth.Auth) (string, error) {
-	return "", nacos.ErrStaticMode
+	return "", errStoreUnavailable
 }
 
-func (s *readonlyAuthStore) Delete(context.Context, string) error { return nacos.ErrStaticMode }
+func (s *readonlyAuthStore) Delete(context.Context, string) error { return errStoreUnavailable }
 
 func (s *readonlyAuthStore) ReadByName(context.Context, string) ([]byte, error) {
-	return nil, nacos.ErrStaticMode
+	return nil, errStoreUnavailable
 }
 
 func (s *readonlyAuthStore) ListMetadata(context.Context) ([]nacos.AuthFileMetadata, error) {
-	return nil, nacos.ErrStaticMode
+	return nil, errStoreUnavailable
 }
 
 func (s *readonlyAuthStore) Watch(context.Context, func([]*coreauth.Auth)) error { return nil }

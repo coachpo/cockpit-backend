@@ -1,9 +1,6 @@
 // Package config provides configuration management for the Cockpit server.
-// It handles loading and parsing YAML configuration files, and provides structured
-// access to application settings including API keys and streaming behavior.
 package config
 
-// SDKConfig represents the application's configuration, loaded from a YAML file.
 type SDKConfig struct {
 	// APIKeys is a list of keys for authenticating clients to this proxy server.
 	APIKeys []string `yaml:"api-keys" json:"api-keys"`

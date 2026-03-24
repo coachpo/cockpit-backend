@@ -2,8 +2,6 @@ package management
 
 import (
 	"encoding/json"
-	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -13,7 +11,7 @@ import (
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 )
 
-var lastRefreshKeys = []string{"last_refresh", "lastRefresh", "last_refreshed_at", "lastRefreshedAt"}
+var lastRefreshKeys = []string{"last_refresh"}
 
 const managedStoreAttribute = "store_managed"
 
@@ -108,18 +106,11 @@ func isManagedStoredAuth(auth *coreauth.Auth) bool {
 	if auth == nil {
 		return false
 	}
-	if strings.EqualFold(strings.TrimSpace(authAttribute(auth, managedStoreAttribute)), "true") {
-		return true
-	}
-	return strings.TrimSpace(authAttribute(auth, "path")) != ""
+	return strings.EqualFold(strings.TrimSpace(authAttribute(auth, managedStoreAttribute)), "true")
 }
 
 func authIDForName(name string) string {
-	id := strings.TrimSpace(filepath.Base(name))
-	if runtime.GOOS == "windows" {
-		id = strings.ToLower(id)
-	}
-	return id
+	return strings.TrimSpace(name)
 }
 
 func buildAuthAttributes(metadata map[string]any) map[string]string {

@@ -2,10 +2,8 @@ package management
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,11 +21,7 @@ func (h *Handler) ListAuthFiles(c *gin.Context) {
 		return
 	}
 	if h.authManager == nil {
-		if h.authStore == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "auth store unavailable"})
-			return
-		}
-		h.listAuthFilesFromStore(c)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "core auth manager unavailable"})
 		return
 	}
 	metadataByName := map[string]nacos.AuthFileMetadata{}
@@ -48,34 +42,6 @@ func (h *Handler) ListAuthFiles(c *gin.Context) {
 	})
 	c.JSON(200, gin.H{"items": files})
 }
-
-func (h *Handler) listAuthFilesFromStore(c *gin.Context) {
-	items, err := h.authStore.ListMetadata(c.Request.Context())
-	if err != nil {
-		c.JSON(500, gin.H{"error": fmt.Sprintf("failed to list auth metadata: %v", err)})
-		return
-	}
-	files := make([]gin.H, 0, len(items))
-	for _, item := range items {
-		entry := gin.H{
-			"id":    item.ID,
-			"name":  item.Name,
-			"type":  item.Type,
-			"email": item.Email,
-			"size":  item.Size,
-		}
-		if !item.ModTime.IsZero() {
-			entry["modtime"] = item.ModTime
-		}
-		if item.Priority != nil {
-			entry["priority"] = *item.Priority
-		}
-		entry["usage_available"] = false
-		files = append(files, entry)
-	}
-	c.JSON(200, gin.H{"items": files})
-}
-
 func (h *Handler) authMetadataByName(ctx context.Context) map[string]nacos.AuthFileMetadata {
 	items, err := h.authStore.ListMetadata(ctx)
 	if err != nil {
@@ -85,9 +51,6 @@ func (h *Handler) authMetadataByName(ctx context.Context) map[string]nacos.AuthF
 	result := make(map[string]nacos.AuthFileMetadata, len(items))
 	for _, item := range items {
 		result[strings.TrimSpace(item.Name)] = item
-		if item.ID != "" {
-			result[item.ID] = item
-		}
 	}
 	return result
 }
@@ -110,7 +73,7 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, metadataByName map[str
 	}
 	name := strings.TrimSpace(auth.FileName)
 	if name == "" {
-		name = auth.ID
+		return nil
 	}
 	status := strings.TrimSpace(string(auth.Status))
 	if status == "" {
@@ -265,11 +228,7 @@ func (h *Handler) GetAuthFileContent(c *gin.Context) {
 	}
 	data, err := h.authStore.ReadByName(c.Request.Context(), name)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			c.JSON(404, gin.H{"error": "file not found"})
-		} else {
-			c.JSON(500, gin.H{"error": fmt.Sprintf("failed to read auth file: %v", err)})
-		}
+		c.JSON(500, gin.H{"error": fmt.Sprintf("failed to read auth file: %v", err)})
 		return
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", name))
@@ -282,12 +241,6 @@ func (h *Handler) findManagedAuth(name string) *coreauth.Auth {
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return nil
-	}
-	if auth, ok := h.authManager.GetByID(name); ok {
-		if isManagedStoredAuth(auth) {
-			return auth
-		}
 		return nil
 	}
 	auths := h.authManager.List()

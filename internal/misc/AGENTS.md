@@ -3,12 +3,11 @@
 Parent: `../AGENTS.md`
 
 ## OVERVIEW
-Focused helper leaf for callback parsing, credential/header utilities, and example-config bootstrap support.
+Focused helper leaf for callback parsing plus small credential/header utilities.
 
 ## WHERE TO LOOK
 - `oauth.go`: secure OAuth state generation and callback URL parsing.
 - `credentials.go`, `header_utils.go`: small auth/header helpers.
-- `copy-example-config.go`: bootstrap helper for example config material.
 
 ## LOCAL CONVENTIONS
 - Keep helpers here focused and reusable across subsystems; do not turn this into a general dumping ground.

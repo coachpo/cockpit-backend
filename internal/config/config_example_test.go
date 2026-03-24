@@ -22,7 +22,6 @@ func TestConfigExampleIncludesCurrentInventory(t *testing.T) {
 
 	assertExactMapKeys(t, example, []string{
 		"api-keys",
-		"auth-dir",
 		"codex-api-key",
 		"codex-header-defaults",
 		"disable-cooling",

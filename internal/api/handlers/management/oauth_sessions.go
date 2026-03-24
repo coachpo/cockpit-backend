@@ -265,7 +265,7 @@ func ValidateOAuthState(state string) error {
 
 func NormalizeOAuthProvider(provider string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "codex", "openai":
+	case "codex":
 		return "codex", nil
 	default:
 		return "", errUnsupportedOAuthFlow

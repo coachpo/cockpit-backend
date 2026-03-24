@@ -50,8 +50,7 @@ type Auth struct {
 	// Provider is the upstream provider key (for example, "codex").
 	Provider string `json:"provider"`
 	// Prefix optionally namespaces models for routing metadata on an auth record.
-	Prefix string `json:"prefix,omitempty"`
-	// FileName stores the relative or absolute path of the backing auth file.
+	Prefix   string `json:"prefix,omitempty"`
 	FileName string `json:"-"`
 	// Storage holds the token persistence implementation used during login flows.
 	Storage baseauth.TokenStorage `json:"-"`
@@ -258,7 +257,6 @@ func (a *Auth) ProxyInfo() string {
 }
 
 // DisableCoolingOverride returns the auth-file scoped disable_cooling override when present.
-// The value is read from metadata key "disable_cooling" (or legacy "disable-cooling").
 func (a *Auth) DisableCoolingOverride() (bool, bool) {
 	if a == nil || a.Metadata == nil {
 		return false, false
@@ -268,46 +266,29 @@ func (a *Auth) DisableCoolingOverride() (bool, bool) {
 			return parsed, true
 		}
 	}
-	if val, ok := a.Metadata["disable-cooling"]; ok {
-		if parsed, okParse := parseBoolAny(val); okParse {
-			return parsed, true
-		}
-	}
 	return false, false
 }
 
 // ToolPrefixDisabled returns whether the proxy_ tool name prefix should be
 // skipped for this auth. When true, tool names are forwarded unchanged.
-// The value is read from metadata key "tool_prefix_disabled" (or "tool-prefix-disabled").
 func (a *Auth) ToolPrefixDisabled() bool {
 	if a == nil || a.Metadata == nil {
 		return false
 	}
-	for _, key := range []string{"tool_prefix_disabled", "tool-prefix-disabled"} {
-		if val, ok := a.Metadata[key]; ok {
-			if parsed, okParse := parseBoolAny(val); okParse {
-				return parsed
-			}
+	if val, ok := a.Metadata["tool_prefix_disabled"]; ok {
+		if parsed, okParse := parseBoolAny(val); okParse {
+			return parsed
 		}
 	}
 	return false
 }
 
 // RequestRetryOverride returns the auth-file scoped request_retry override when present.
-// The value is read from metadata key "request_retry" (or legacy "request-retry").
 func (a *Auth) RequestRetryOverride() (int, bool) {
 	if a == nil || a.Metadata == nil {
 		return 0, false
 	}
 	if val, ok := a.Metadata["request_retry"]; ok {
-		if parsed, okParse := parseIntAny(val); okParse {
-			if parsed < 0 {
-				parsed = 0
-			}
-			return parsed, true
-		}
-	}
-	if val, ok := a.Metadata["request-retry"]; ok {
 		if parsed, okParse := parseIntAny(val); okParse {
 			if parsed < 0 {
 				parsed = 0

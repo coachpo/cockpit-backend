@@ -158,7 +158,6 @@ func (r *ModelRegistry) GetModelsForClient(clientID string) []*ModelInfo {
 				continue
 			}
 		}
-		// Fallback to global registry (for backwards compatibility)
 		if reg, ok := r.models[modelID]; ok && reg.Info != nil {
 			result = append(result, cloneModelInfo(reg.Info))
 		}

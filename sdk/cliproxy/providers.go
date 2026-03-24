@@ -7,14 +7,13 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/watcher"
 )
 
-// NewFileTokenClientProvider returns the default token-backed client loader.
-func NewFileTokenClientProvider() TokenClientProvider {
-	return &fileTokenClientProvider{}
+func NewTokenClientProvider() TokenClientProvider {
+	return &tokenClientProvider{}
 }
 
-type fileTokenClientProvider struct{}
+type tokenClientProvider struct{}
 
-func (p *fileTokenClientProvider) Load(ctx context.Context, cfg *config.Config) (*TokenClientResult, error) {
+func (p *tokenClientProvider) Load(ctx context.Context, cfg *config.Config) (*TokenClientResult, error) {
 	// Stateless executors handle tokens
 	_ = ctx
 	_ = cfg

@@ -7,6 +7,7 @@ package api
 import (
 	internalmanagement "github.com/coachpo/cockpit-backend/internal/api/handlers/management"
 	"github.com/coachpo/cockpit-backend/internal/config"
+	"github.com/coachpo/cockpit-backend/internal/nacos"
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 	"github.com/gin-gonic/gin"
 )
@@ -15,7 +16,6 @@ import (
 type ManagementTokenRequester interface {
 	CreateOAuthSession(*gin.Context)
 	GetOAuthSessionStatus(*gin.Context)
-	PostOAuthSessionCallback(*gin.Context)
 }
 
 type managementTokenRequester struct {
@@ -23,9 +23,9 @@ type managementTokenRequester struct {
 }
 
 // NewManagementTokenRequester creates a limited management handler exposing only token request endpoints.
-func NewManagementTokenRequester(cfg *config.Config, manager *coreauth.Manager) ManagementTokenRequester {
+func NewManagementTokenRequester(cfg *config.Config, manager *coreauth.Manager, store nacos.WatchableAuthStore) ManagementTokenRequester {
 	return &managementTokenRequester{
-		handler: internalmanagement.NewHandlerWithoutConfigFilePath(cfg, manager),
+		handler: internalmanagement.NewHandler(cfg, manager, store),
 	}
 }
 
@@ -35,8 +35,4 @@ func (m *managementTokenRequester) CreateOAuthSession(c *gin.Context) {
 
 func (m *managementTokenRequester) GetOAuthSessionStatus(c *gin.Context) {
 	m.handler.GetOAuthSessionStatus(c)
-}
-
-func (m *managementTokenRequester) PostOAuthSessionCallback(c *gin.Context) {
-	m.handler.PostOAuthSessionCallback(c)
 }

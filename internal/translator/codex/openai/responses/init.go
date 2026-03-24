@@ -2,8 +2,8 @@ package responses
 
 import (
 	. "github.com/coachpo/cockpit-backend/internal/constant"
-	"github.com/coachpo/cockpit-backend/internal/interfaces"
 	"github.com/coachpo/cockpit-backend/internal/translator/translator"
+	sdktranslator "github.com/coachpo/cockpit-backend/sdk/translator"
 )
 
 func init() {
@@ -11,7 +11,7 @@ func init() {
 		OpenaiResponse,
 		Codex,
 		ConvertOpenAIResponsesRequestToCodex,
-		interfaces.TranslateResponse{
+		sdktranslator.ResponseTransform{
 			Stream:    ConvertCodexResponseToOpenAIResponses,
 			NonStream: ConvertCodexResponseToOpenAIResponsesNonStream,
 		},

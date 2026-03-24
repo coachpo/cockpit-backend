@@ -3,18 +3,6 @@
 // and retrieval for maintaining authenticated sessions with the Codex API.
 package codex
 
-import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-
-	"github.com/coachpo/cockpit-backend/internal/misc"
-)
-
-// CodexTokenStorage stores OAuth2 token information for OpenAI Codex API authentication.
-// It maintains compatibility with the existing auth system while adding Codex-specific fields
-// for managing access tokens, refresh tokens, and user account information.
 type CodexTokenStorage struct {
 	// IDToken is the JWT ID token containing user claims and identity information.
 	IDToken string `json:"id_token"`
@@ -41,42 +29,4 @@ type CodexTokenStorage struct {
 // SetMetadata allows external callers to inject metadata into the storage before saving.
 func (ts *CodexTokenStorage) SetMetadata(meta map[string]any) {
 	ts.Metadata = meta
-}
-
-// SaveTokenToFile serializes the Codex token storage to a JSON file.
-// This method creates the necessary directory structure and writes the token
-// data in JSON format to the specified file path for persistent storage.
-// It merges any injected metadata into the top-level JSON object.
-//
-// Parameters:
-//   - authFilePath: The full path where the token file should be saved
-//
-// Returns:
-//   - error: An error if the operation fails, nil otherwise
-func (ts *CodexTokenStorage) SaveTokenToFile(authFilePath string) error {
-	misc.LogSavingCredentials(authFilePath)
-	ts.Type = "codex"
-	if err := os.MkdirAll(filepath.Dir(authFilePath), 0700); err != nil {
-		return fmt.Errorf("failed to create directory: %v", err)
-	}
-
-	f, err := os.Create(authFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to create token file: %w", err)
-	}
-	defer func() {
-		_ = f.Close()
-	}()
-
-	// Merge metadata using helper
-	data, errMerge := misc.MergeMetadata(ts, ts.Metadata)
-	if errMerge != nil {
-		return fmt.Errorf("failed to merge metadata: %w", errMerge)
-	}
-
-	if err = json.NewEncoder(f).Encode(data); err != nil {
-		return fmt.Errorf("failed to write token to file: %w", err)
-	}
-	return nil
-
 }

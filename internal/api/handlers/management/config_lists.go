@@ -1,7 +1,6 @@
 package management
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -116,21 +115,10 @@ func (h *Handler) GetCodexKeys(c *gin.Context) {
 	c.JSON(200, gin.H{"codex-api-key": h.cfg.CodexKey})
 }
 func (h *Handler) PutCodexKeys(c *gin.Context) {
-	data, err := c.GetRawData()
-	if err != nil {
-		c.JSON(400, gin.H{"error": "failed to read body"})
-		return
-	}
 	var arr []config.CodexKey
-	if err = json.Unmarshal(data, &arr); err != nil {
-		var obj struct {
-			Items []config.CodexKey `json:"items"`
-		}
-		if err2 := json.Unmarshal(data, &obj); err2 != nil || len(obj.Items) == 0 {
-			c.JSON(400, gin.H{"error": "invalid body"})
-			return
-		}
-		arr = obj.Items
+	if err := c.ShouldBindJSON(&arr); err != nil {
+		c.JSON(400, gin.H{"error": "invalid body"})
+		return
 	}
 	normalized := make([]config.CodexKey, 0, len(arr))
 	for i := range arr {

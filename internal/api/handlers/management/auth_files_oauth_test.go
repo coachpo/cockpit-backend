@@ -190,7 +190,7 @@ func TestCreateOAuthSession_UsesBackendLoopbackRedirect(t *testing.T) {
 		return &callbackForwarder{done: done}, nil
 	}
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, nil)
+	h := NewHandlerWithoutPersistence(&config.Config{}, nil)
 	h.authStore = &readonlyAuthStore{}
 
 	rec := httptest.NewRecorder()
@@ -233,109 +233,26 @@ func TestCreateOAuthSession_UsesBackendLoopbackRedirect(t *testing.T) {
 	}
 }
 
-func TestCreateOAuthSession_IgnoresLegacyCallbackOriginAndUsesForwardedBackendOrigin(t *testing.T) {
+func TestCreateOAuthSession_RejectsUnknownCreateField(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	oldStore := oauthSessions
 	oauthSessions = newOAuthSessionStore(oauthSessionTTL)
 	defer func() { oauthSessions = oldStore }()
-	oldForwarderFactory := startOAuthCallbackServer
-	defer func() { startOAuthCallbackServer = oldForwarderFactory }()
-	var forwarderTarget string
-	startOAuthCallbackServer = func(port int, targetBase string) (*callbackForwarder, error) {
-		forwarderTarget = targetBase
-		done := make(chan struct{})
-		close(done)
-		return &callbackForwarder{done: done}, nil
-	}
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, nil)
+	h := NewHandlerWithoutPersistence(&config.Config{}, nil)
 	h.authStore = &readonlyAuthStore{}
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/api/oauth-sessions", strings.NewReader(`{"provider":"codex","callback_origin":"https://evil.example"}`))
+	ctx.Request = httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8317/api/oauth-sessions", strings.NewReader(`{"provider":"codex","unexpected_field":"https://evil.example"}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 	ctx.Request.Header.Set("X-Forwarded-Proto", "https")
 	ctx.Request.Header.Set("X-Forwarded-Host", "cockpit.example.com:9443")
 
 	h.CreateOAuthSession(ctx)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
-	}
-	var body struct {
-		State string `json:"state"`
-		URL   string `json:"url"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("failed to decode create response: %v", err)
-	}
-	parsed, err := url.Parse(body.URL)
-	if err != nil {
-		t.Fatalf("failed to parse auth url: %v", err)
-	}
-	if got := parsed.Query().Get("redirect_uri"); got != codex.RedirectURI {
-		t.Fatalf("expected redirect_uri to stay on fixed Codex loopback callback, got %q", got)
-	}
-	if forwarderTarget != "https://cockpit.example.com:9443/auth/callback" {
-		t.Fatalf("expected loopback forwarder to target forwarded backend origin, got %q", forwarderTarget)
-	}
-	session, err := LoadOAuthSession(body.State)
-	if err != nil {
-		t.Fatalf("expected stored oauth session, got %v", err)
-	}
-	if session.RedirectURI != codex.RedirectURI {
-		t.Fatalf("expected stored backend callback redirect, got %+v", session)
-	}
-}
-
-func TestCreateOAuthSession_LocalCallbackHelperSkipsBackendForwarder(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	oldStore := oauthSessions
-	oauthSessions = newOAuthSessionStore(oauthSessionTTL)
-	defer func() { oauthSessions = oldStore }()
-	oldForwarderFactory := startOAuthCallbackServer
-	defer func() { startOAuthCallbackServer = oldForwarderFactory }()
-	forwarderCalls := 0
-	startOAuthCallbackServer = func(port int, targetBase string) (*callbackForwarder, error) {
-		forwarderCalls++
-		done := make(chan struct{})
-		close(done)
-		return &callbackForwarder{done: done}, nil
-	}
-
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, nil)
-	h.authStore = &readonlyAuthStore{}
-
-	rec := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "https://cockpit.example.com/api/oauth-sessions", strings.NewReader(`{"provider":"codex","local_callback_helper":true}`))
-	ctx.Request.Header.Set("Content-Type", "application/json")
-
-	h.CreateOAuthSession(ctx)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
-	}
-	if forwarderCalls != 0 {
-		t.Fatalf("expected helper mode to skip backend forwarder startup, got %d call(s)", forwarderCalls)
-	}
-	var body struct {
-		State string `json:"state"`
-		URL   string `json:"url"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("failed to decode create response: %v", err)
-	}
-	if body.State == "" || body.URL == "" {
-		t.Fatalf("expected oauth session response, got %+v", body)
-	}
-	session, err := LoadOAuthSession(body.State)
-	if err != nil {
-		t.Fatalf("expected stored oauth session, got %v", err)
-	}
-	if session.RedirectURI != codex.RedirectURI || session.Provider != "codex" || session.Status != oauthStatusPending {
-		t.Fatalf("unexpected stored session in helper mode: %+v", session)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d with body %s", http.StatusBadRequest, rec.Code, rec.Body.String())
 	}
 }
 
@@ -350,7 +267,7 @@ func TestGetOAuthSessionStatus_ReturnsGoneForExpiredSession(t *testing.T) {
 	}
 	time.Sleep(time.Millisecond)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, nil)
+	h := NewHandlerWithoutPersistence(&config.Config{}, nil)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/oauth-sessions/expired-state", nil)
@@ -360,61 +277,6 @@ func TestGetOAuthSessionStatus_ReturnsGoneForExpiredSession(t *testing.T) {
 
 	if rec.Code != http.StatusGone {
 		t.Fatalf("expected status %d, got %d with body %s", http.StatusGone, rec.Code, rec.Body.String())
-	}
-}
-
-func TestPostOAuthSessionCallback_UsesStoredRedirectURIForExchange(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	oldStore := oauthSessions
-	oauthSessions = newOAuthSessionStore(oauthSessionTTL)
-	defer func() { oauthSessions = oldStore }()
-	oldFactory := newCodexOAuthClient
-	defer func() { newCodexOAuthClient = oldFactory }()
-
-	fake := &fakeCodexOAuthClient{bundle: &codex.CodexAuthBundle{TokenData: codex.CodexTokenData{
-		IDToken:      testCodexIDToken(t, "oauth@example.com", "acct_123", "plus"),
-		AccessToken:  "access-token",
-		RefreshToken: "refresh-token",
-		AccountID:    "acct_123",
-		Email:        "oauth@example.com",
-		Expire:       "2026-03-23T19:00:00Z",
-	}, LastRefresh: "2026-03-22T19:00:00Z"}}
-	newCodexOAuthClient = func(cfg *config.Config) codexOAuthClient { return fake }
-
-	if err := RegisterOAuthSessionWithRedirect("state-123", "codex", codex.RedirectURI, &codex.PKCECodes{CodeVerifier: "verifier", CodeChallenge: "challenge"}); err != nil {
-		t.Fatalf("failed to register oauth session: %v", err)
-	}
-
-	store := &recordingAuthStore{}
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, nil)
-	h.authStore = store
-
-	rec := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/oauth-sessions/state-123/callback", strings.NewReader(`{"provider":"codex","code":"auth-code"}`))
-	ctx.Request.Header.Set("Content-Type", "application/json")
-	ctx.Params = gin.Params{{Key: "state", Value: "state-123"}}
-
-	h.PostOAuthSessionCallback(ctx)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
-	}
-	if fake.exchangeCode != "auth-code" {
-		t.Fatalf("expected callback code auth-code, got %q", fake.exchangeCode)
-	}
-	if fake.exchangeRedirectURI != codex.RedirectURI {
-		t.Fatalf("expected stored redirect uri to be reused during exchange, got %q", fake.exchangeRedirectURI)
-	}
-	if saved := store.lastSaved(); saved == nil || strings.TrimSpace(saved.FileName) == "" {
-		t.Fatalf("expected exchanged tokens to be persisted, got %#v", saved)
-	}
-	session, err := LoadOAuthSession("state-123")
-	if err != nil {
-		t.Fatalf("expected completed oauth session, got %v", err)
-	}
-	if session.Status != oauthStatusComplete || strings.TrimSpace(session.AuthFile) == "" {
-		t.Fatalf("expected completed oauth session with auth file, got %+v", session)
 	}
 }
 
@@ -441,7 +303,7 @@ func TestGetOAuthCallback_UsesStoredRedirectURIForExchangeAndReturnsHTML(t *test
 	}
 
 	store := &recordingAuthStore{}
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, nil)
+	h := NewHandlerWithoutPersistence(&config.Config{}, nil)
 	h.authStore = store
 
 	rec := httptest.NewRecorder()
@@ -488,7 +350,7 @@ func TestGetOAuthCallback_SetsSessionErrorAndReturnsHTML(t *testing.T) {
 		t.Fatalf("failed to register oauth session: %v", err)
 	}
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, nil)
+	h := NewHandlerWithoutPersistence(&config.Config{}, nil)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/auth/callback?state=state-error&error=access_denied", nil)

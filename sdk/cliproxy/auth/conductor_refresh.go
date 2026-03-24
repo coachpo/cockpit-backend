@@ -165,10 +165,10 @@ func authPreferredInterval(a *Auth) time.Duration {
 	if a == nil {
 		return 0
 	}
-	if d := durationFromMetadata(a.Metadata, "refresh_interval_seconds", "refreshIntervalSeconds", "refresh_interval", "refreshInterval"); d > 0 {
+	if d := durationFromMetadata(a.Metadata, "refresh_interval_seconds"); d > 0 {
 		return d
 	}
-	if d := durationFromAttributes(a.Attributes, "refresh_interval_seconds", "refreshIntervalSeconds", "refresh_interval", "refreshInterval"); d > 0 {
+	if d := durationFromAttributes(a.Attributes, "refresh_interval_seconds"); d > 0 {
 		return d
 	}
 	return 0
@@ -284,12 +284,12 @@ func authLastRefreshTimestamp(a *Auth) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	if a.Metadata != nil {
-		if ts, ok := lookupMetadataTime(a.Metadata, "last_refresh", "lastRefresh", "last_refreshed_at", "lastRefreshedAt"); ok {
+		if ts, ok := lookupMetadataTime(a.Metadata, "last_refresh"); ok {
 			return ts, true
 		}
 	}
 	if a.Attributes != nil {
-		for _, key := range []string{"last_refresh", "lastRefresh", "last_refreshed_at", "lastRefreshedAt"} {
+		for _, key := range []string{"last_refresh"} {
 			if val := strings.TrimSpace(a.Attributes[key]); val != "" {
 				if ts, ok := parseTimeValue(val); ok {
 					return ts, true

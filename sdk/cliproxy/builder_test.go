@@ -12,6 +12,18 @@ import (
 
 type builderTestAuthStore struct{}
 
+type builderTestConfigSource struct {
+	mode string
+}
+
+func (s builderTestConfigSource) LoadConfig() (*config.Config, error) { return &config.Config{}, nil }
+func (s builderTestConfigSource) SaveConfig(*config.Config) error     { return nil }
+func (s builderTestConfigSource) WatchConfig(func(*config.Config)) error {
+	return nil
+}
+func (s builderTestConfigSource) StopWatch()   {}
+func (s builderTestConfigSource) Mode() string { return s.mode }
+
 func (builderTestAuthStore) List(context.Context) ([]*coreauth.Auth, error) { return nil, nil }
 func (builderTestAuthStore) Save(context.Context, *coreauth.Auth) (string, error) {
 	return "", nil
@@ -29,7 +41,6 @@ func (builderTestAuthStore) StopWatch()                                         
 func TestBuildFailsWhenConfigSourceIsMissing(t *testing.T) {
 	_, err := NewBuilder().
 		WithConfig(&config.Config{}).
-		WithConfigPath("/tmp/config.yaml").
 		WithAuthStore(builderTestAuthStore{}).
 		Build()
 	if err == nil {
@@ -43,13 +54,26 @@ func TestBuildFailsWhenConfigSourceIsMissing(t *testing.T) {
 func TestBuildFailsWhenAuthStoreIsMissing(t *testing.T) {
 	_, err := NewBuilder().
 		WithConfig(&config.Config{}).
-		WithConfigPath("/tmp/config.yaml").
-		WithConfigSource(serviceRuntimeModeConfigSource{mode: "nacos"}).
+		WithConfigSource(builderTestConfigSource{mode: "nacos"}).
 		Build()
 	if err == nil {
 		t.Fatal("expected Build to fail when auth store is missing")
 	}
 	if !strings.Contains(err.Error(), "auth store") {
 		t.Fatalf("expected auth store error, got %q", err)
+	}
+}
+
+func TestBuildAllowsNacosConfigSource(t *testing.T) {
+	service, err := NewBuilder().
+		WithConfig(&config.Config{}).
+		WithConfigSource(builderTestConfigSource{mode: "nacos"}).
+		WithAuthStore(builderTestAuthStore{}).
+		Build()
+	if err != nil {
+		t.Fatalf("expected Build to allow Nacos config source, got %v", err)
+	}
+	if service == nil {
+		t.Fatal("expected Build to return a service")
 	}
 }

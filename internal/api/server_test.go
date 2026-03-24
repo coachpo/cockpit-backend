@@ -3,8 +3,6 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -21,18 +19,11 @@ func newTestServer(t *testing.T, mutate func(*proxyconfig.Config), opts ...Serve
 
 	gin.SetMode(gin.TestMode)
 
-	tmpDir := t.TempDir()
-	authDir := filepath.Join(tmpDir, "auth")
-	if err := os.MkdirAll(authDir, 0o700); err != nil {
-		t.Fatalf("failed to create auth dir: %v", err)
-	}
-
 	cfg := &proxyconfig.Config{
 		SDKConfig: sdkconfig.SDKConfig{
 			APIKeys: []string{"test-key"},
 		},
-		Port:    0,
-		AuthDir: authDir,
+		Port: 0,
 	}
 	if mutate != nil {
 		mutate(cfg)
@@ -40,12 +31,7 @@ func newTestServer(t *testing.T, mutate func(*proxyconfig.Config), opts ...Serve
 
 	authManager := auth.NewManager(nil, nil, nil)
 	accessManager := sdkaccess.NewManager()
-
-	configPath := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("port: 0\n"), 0o600); err != nil {
-		t.Fatalf("failed to seed config file: %v", err)
-	}
-	return NewServer(cfg, authManager, accessManager, configPath, nil, opts...)
+	return NewServer(cfg, authManager, accessManager, nil, opts...)
 }
 
 type managementRouteCase struct {
@@ -246,7 +232,6 @@ func TestManagementRetainedRoutesRemainMounted(t *testing.T) {
 		routeKey(http.MethodPost, "/api/auth-files/:name/usage"),
 		routeKey(http.MethodPost, "/api/oauth-sessions"),
 		routeKey(http.MethodGet, "/api/oauth-sessions/:state"),
-		routeKey(http.MethodPost, "/api/oauth-sessions/:state/callback"),
 		routeKey(http.MethodGet, "/auth/callback"),
 	}
 

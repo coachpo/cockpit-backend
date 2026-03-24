@@ -1,10 +1,6 @@
 // Package config provides configuration management for the Cockpit server.
-// It handles loading and parsing YAML configuration files, and provides structured
-// access to application settings including server settings, authentication directory,
-// and API key inventory.
 package config
 
-// Config represents the application's configuration, loaded from a YAML file.
 type Config struct {
 	SDKConfig `yaml:",inline"`
 	// Host is the network host/interface on which the API server will bind.
@@ -12,9 +8,6 @@ type Config struct {
 	Host string `yaml:"host" json:"-"`
 	// Port is the network port on which the API server will listen.
 	Port int `yaml:"port" json:"-"`
-
-	// AuthDir is the directory where authentication token files are stored.
-	AuthDir string `yaml:"auth-dir" json:"-"`
 
 	// DisableCooling disables quota cooldown scheduling when true.
 	DisableCooling bool `yaml:"disable-cooling" json:"disable-cooling"`
@@ -36,7 +29,6 @@ type Config struct {
 	// WebsocketAuth enables or disables authentication for the WebSocket API.
 	WebsocketAuth bool `yaml:"ws-auth" json:"ws-auth"`
 
-	// Codex defines a list of Codex API key configurations as specified in the YAML configuration file.
 	CodexKey []CodexKey `yaml:"codex-api-key" json:"codex-api-key"`
 
 	// CodexHeaderDefaults configures fallback headers for Codex OAuth model requests.
@@ -44,8 +36,6 @@ type Config struct {
 	CodexHeaderDefaults CodexHeaderDefaults `yaml:"codex-header-defaults" json:"codex-header-defaults"`
 }
 
-// CodexHeaderDefaults configures fallback header values injected into Codex
-// model requests for OAuth/file-backed auth when the client omits them.
 // UserAgent applies to HTTP and websocket requests; BetaFeatures only applies to websockets.
 type CodexHeaderDefaults struct {
 	UserAgent    string `yaml:"user-agent" json:"user-agent"`

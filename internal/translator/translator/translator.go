@@ -7,7 +7,6 @@ package translator
 import (
 	"context"
 
-	"github.com/coachpo/cockpit-backend/internal/interfaces"
 	sdktranslator "github.com/coachpo/cockpit-backend/sdk/translator"
 )
 
@@ -21,7 +20,7 @@ var registry = sdktranslator.Default()
 //   - to: The target API format identifier
 //   - request: The request translation function
 //   - response: The response translation function
-func Register(from, to string, request interfaces.TranslateRequestFunc, response interfaces.TranslateResponse) {
+func Register(from, to string, request sdktranslator.RequestTransform, response sdktranslator.ResponseTransform) {
 	registry.Register(sdktranslator.FromString(from), sdktranslator.FromString(to), request, response)
 }
 

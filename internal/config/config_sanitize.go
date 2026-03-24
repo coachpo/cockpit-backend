@@ -52,3 +52,15 @@ func NormalizeHeaders(headers map[string]string) map[string]string {
 	}
 	return clean
 }
+
+func NormalizeRoutingStrategy(strategy string) (string, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(strategy))
+	switch normalized {
+	case "", "round-robin":
+		return "round-robin", true
+	case "fill-first":
+		return "fill-first", true
+	default:
+		return "", false
+	}
+}

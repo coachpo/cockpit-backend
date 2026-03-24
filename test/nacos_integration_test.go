@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -18,7 +17,6 @@ import (
 	internalcmd "github.com/coachpo/cockpit-backend/internal/cmd"
 	"github.com/coachpo/cockpit-backend/internal/logging"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
-	"github.com/coachpo/cockpit-backend/internal/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -57,7 +55,7 @@ type managementAuthFile struct {
 }
 
 type managementAuthFilesResponse struct {
-	Files []managementAuthFile `json:"files"`
+	Items []managementAuthFile `json:"items"`
 }
 
 func (b *syncLogBuffer) Write(p []byte) (int, error) {
@@ -156,23 +154,15 @@ func reserveLocalPort(t *testing.T) int {
 func loadSmokeAuthPayload(t *testing.T) string {
 	t.Helper()
 
-	if path := strings.TrimSpace(os.Getenv("COCKPIT_NACOS_AUTH_FILE")); path != "" {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read COCKPIT_NACOS_AUTH_FILE %q: %v", path, err)
-		}
-		return normalizeAuthPayload(t, string(data), path)
-	}
-
 	if raw := strings.TrimSpace(os.Getenv("COCKPIT_NACOS_AUTH_JSON")); raw != "" {
 		return normalizeAuthPayload(t, raw, "COCKPIT_NACOS_AUTH_JSON")
 	}
 
-	return `{"updated-codex":{"type":"codex","email":"updated-nacos-smoke@example.com","disabled":false}}`
+	return `{"updated-codex":{"file_name":"updated-codex.json","type":"codex","email":"updated-nacos-smoke@example.com","disabled":false}}`
 }
 
 func sampleSmokeAuthPayload() string {
-	return `{"example-codex":{"type":"codex","email":"nacos-smoke@example.com","disabled":false}}`
+	return `{"example-codex":{"file_name":"example-codex.json","type":"codex","email":"nacos-smoke@example.com","disabled":false}}`
 }
 
 func normalizeAuthPayload(t *testing.T, raw string, source string) string {
@@ -186,80 +176,17 @@ func normalizeAuthPayload(t *testing.T, raw string, source string) string {
 		payload = map[string]any{}
 	}
 
-	if _, hasType := payload["type"]; hasType {
-		authID := strings.TrimSpace(os.Getenv("COCKPIT_NACOS_AUTH_ID"))
-		if authID == "" {
-			authID = strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
-		}
-		if authID == "" || authID == "." || authID == "COCKPIT_NACOS_AUTH_JSON" {
-			authID = "imported-auth"
-		}
-		wrapped := compactAuthEntriesForNacos(t, map[string]any{authID: payload})
-		return canonicalJSON(t, wrapped)
-	}
-
 	for key, value := range payload {
-		if _, ok := value.(map[string]any); !ok {
-			t.Fatalf("auth payload from %s must be a single record or a map of auth records; key %q is %T", source, key, value)
-		}
-	}
-
-	return canonicalJSON(t, compactAuthEntriesForNacos(t, payload))
-}
-
-func compactAuthEntriesForNacos(t *testing.T, entries map[string]any) map[string]any {
-	t.Helper()
-	if len(entries) != 1 {
-		return entries
-	}
-
-	var (
-		entryID  string
-		entryMap map[string]any
-	)
-	for id, raw := range entries {
-		entryID = id
-		mapped, ok := raw.(map[string]any)
+		entry, ok := value.(map[string]any)
 		if !ok {
-			return entries
+			t.Fatalf("auth payload from %s must be a map of auth records; key %q is %T", source, key, value)
 		}
-		entryMap = mapped
-	}
-	if strings.TrimSpace(strings.ToLower(stringValueAny(entryMap, "type"))) != "codex" {
-		return entries
-	}
-	if len(entryMap) == 0 || stringValueAny(entryMap, "access_token") == "" {
-		return entries
+		if strings.TrimSpace(stringValueAny(entry, "file_name")) == "" {
+			t.Fatalf("auth payload from %s must include file_name for auth %q", source, key)
+		}
 	}
 
-	canonical := func(value map[string]any) string {
-		return canonicalJSON(t, value)
-	}
-	if len(canonical(entries)) <= 3000 {
-		return entries
-	}
-
-	compact := func(keys []string) map[string]any {
-		cloned := make(map[string]any)
-		for _, key := range keys {
-			if value, ok := entryMap[key]; ok {
-				cloned[key] = value
-			}
-		}
-		if _, ok := cloned["type"]; !ok {
-			cloned["type"] = "codex"
-		}
-		if _, ok := cloned["disabled"]; !ok {
-			cloned["disabled"] = false
-		}
-		return map[string]any{entryID: cloned}
-	}
-
-	withIDToken := compact([]string{"access_token", "refresh_token", "id_token", "account_id", "email", "type", "disabled", "websocket"})
-	if len(canonical(withIDToken)) <= 3000 {
-		return withIDToken
-	}
-	return compact([]string{"access_token", "refresh_token", "account_id", "email", "type", "disabled", "websocket"})
+	return canonicalJSON(t, payload)
 }
 
 func stringValueAny(values map[string]any, key string) string {
@@ -310,7 +237,7 @@ func expectedAuthFile(payload string) (managementAuthFile, error) {
 	entry := entries[id]
 	name, _ := entry["file_name"].(string)
 	if strings.TrimSpace(name) == "" {
-		name = id + ".json"
+		return managementAuthFile{}, fmt.Errorf("expected auth entry %q to include file_name", id)
 	}
 	email, _ := entry["email"].(string)
 	provider, _ := entry["type"].(string)
@@ -385,11 +312,6 @@ func runNacosSmokeTest(t *testing.T, cfg nacosSmokeConfig) error {
 	if err != nil {
 		return fmt.Errorf("load config from nacos: %w", err)
 	}
-	resolvedAuthDir, err := util.ResolveAuthDir(loadedCfg.AuthDir)
-	if err != nil {
-		return fmt.Errorf("resolve auth dir: %w", err)
-	}
-	loadedCfg.AuthDir = resolvedAuthDir
 
 	logging.SetupBaseLogger()
 	if err = logging.ConfigureLogOutput(loadedCfg); err != nil {
@@ -405,8 +327,7 @@ func runNacosSmokeTest(t *testing.T, cfg nacosSmokeConfig) error {
 		log.SetLevel(previousLevel)
 	})
 
-	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	cancel, done := internalcmd.StartServiceBackground(loadedCfg, configPath, configSource, authStore)
+	cancel, done := internalcmd.StartServiceBackground(loadedCfg, configSource, authStore)
 	t.Cleanup(func() {
 		cancel()
 		select {
@@ -462,8 +383,6 @@ func TestBuildSmokeConfig_UsesRetainedSchema(t *testing.T) {
 	const want = `host: ""
 port: 8317
 
-auth-dir: "~/.cockpit"
-
 disable-cooling: true
 request-retry: 3
 max-retry-credentials: 0
@@ -487,8 +406,6 @@ ws-auth: false
 func buildSmokeConfig(port int, disableCooling bool, passthroughHeaders bool) string {
 	return fmt.Sprintf(`host: ""
 port: %d
-
-auth-dir: "~/.cockpit"
 
 disable-cooling: %t
 request-retry: 3
@@ -687,7 +604,7 @@ func waitForManagementAuth(httpClient *http.Client, port int, payload string, ti
 		files, errFetch := fetchManagementAuthFiles(httpClient, port)
 		if errFetch == nil {
 			for _, got := range files {
-				if (got.ID == want.ID || got.ID == want.Name) && got.Email == want.Email && strings.EqualFold(got.Type, want.Type) {
+				if got.ID == want.ID && got.Name == want.Name && got.Email == want.Email && strings.EqualFold(got.Type, want.Type) {
 					return nil
 				}
 			}
@@ -723,14 +640,25 @@ func fetchManagementAuthFiles(httpClient *http.Client, port int) ([]managementAu
 	if err = json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("decode management auth files response: %w", err)
 	}
-	return payload.Files, nil
+	return payload.Items, nil
 }
 
 func uploadManagementAuthFile(httpClient *http.Client, port int, name string, body string) error {
+	var content map[string]any
+	if err := json.Unmarshal([]byte(body), &content); err != nil {
+		return fmt.Errorf("decode management auth body: %w", err)
+	}
+	requestBody, errMarshal := json.Marshal(map[string]any{
+		"name":    name,
+		"content": content,
+	})
+	if errMarshal != nil {
+		return fmt.Errorf("marshal management auth upload request: %w", errMarshal)
+	}
 	req, err := http.NewRequest(
 		http.MethodPost,
-		fmt.Sprintf("http://127.0.0.1:%d/api/auth-files?name=%s", port, url.QueryEscape(name)),
-		strings.NewReader(body),
+		fmt.Sprintf("http://127.0.0.1:%d/api/auth-files", port),
+		strings.NewReader(string(requestBody)),
 	)
 	if err != nil {
 		return fmt.Errorf("build management upload request: %w", err)

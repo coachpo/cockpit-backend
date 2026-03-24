@@ -14,34 +14,6 @@ import (
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 )
 
-type modeTestConfigSource struct {
-	mode string
-}
-
-func (s modeTestConfigSource) LoadConfig() (*config.Config, error) { return &config.Config{}, nil }
-func (s modeTestConfigSource) SaveConfig(*config.Config) error     { return nil }
-func (s modeTestConfigSource) WatchConfig(func(*config.Config)) error {
-	return nil
-}
-func (s modeTestConfigSource) StopWatch()   {}
-func (s modeTestConfigSource) Mode() string { return s.mode }
-
-type modeTestAuthStore struct{}
-
-func (modeTestAuthStore) List(context.Context) ([]*coreauth.Auth, error) { return nil, nil }
-func (modeTestAuthStore) Save(context.Context, *coreauth.Auth) (string, error) {
-	return "", nil
-}
-func (modeTestAuthStore) Delete(context.Context, string) error { return nil }
-func (modeTestAuthStore) ReadByName(context.Context, string) ([]byte, error) {
-	return nil, nil
-}
-func (modeTestAuthStore) ListMetadata(context.Context) ([]nacos.AuthFileMetadata, error) {
-	return nil, nil
-}
-func (modeTestAuthStore) Watch(context.Context, func([]*coreauth.Auth)) error { return nil }
-func (modeTestAuthStore) StopWatch()                                          {}
-
 func TestMainExitsNonZeroWhenBootstrapFails(t *testing.T) {
 	if os.Getenv("COCKPIT_MAIN_FAIL_HELPER") == "1" {
 		tempDir := t.TempDir()
@@ -83,26 +55,10 @@ func TestMainExitsNonZeroWhenBootstrapFails(t *testing.T) {
 func TestNewCommandFlagSet_ExposesRuntimeOverrideFlags(t *testing.T) {
 	var options commandOptions
 	fs := newCommandFlagSet("cockpit", &options)
-	for _, flagName := range []string{"config", "host", "port"} {
+	for _, flagName := range []string{"host", "port"} {
 		if fs.Lookup(flagName) == nil {
 			t.Fatalf("expected -%s flag to exist", flagName)
 		}
-	}
-}
-
-func TestNewCommandFlagSet_ParsesConfigOverride(t *testing.T) {
-	var options commandOptions
-	fs := newCommandFlagSet("cockpit", &options)
-	if err := fs.Parse([]string{"-config", "/tmp/custom-config.yaml"}); err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-	if got := fs.Lookup("config"); got == nil {
-		t.Fatal("expected -config flag lookup after parse")
-	} else if got.Value.String() != "/tmp/custom-config.yaml" {
-		t.Fatalf("expected config flag value to be propagated, got %q", got.Value.String())
-	}
-	if options.configPath != "/tmp/custom-config.yaml" {
-		t.Fatalf("expected parsed config override, got %q", options.configPath)
 	}
 }
 
@@ -117,12 +73,9 @@ func TestParseCommandArgs_RejectsPositionalArgs(t *testing.T) {
 }
 
 func TestParseCommandArgs_ParsesRuntimeOverrides(t *testing.T) {
-	options, err := parseCommandArgs("cockpit", []string{"--config", "/tmp/custom-config.yaml", "--host", "0.0.0.0", "--port", "8080"})
+	options, err := parseCommandArgs("cockpit", []string{"--host", "0.0.0.0", "--port", "8080"})
 	if err != nil {
 		t.Fatalf("parseCommandArgs() error = %v", err)
-	}
-	if options.configPath != "/tmp/custom-config.yaml" {
-		t.Fatalf("expected config path override, got %q", options.configPath)
 	}
 	if !options.hostSet || options.host != "0.0.0.0" {
 		t.Fatalf("expected host override to be set, got host=%q hostSet=%v", options.host, options.hostSet)
@@ -169,16 +122,13 @@ func TestApplyRuntimeOverrides_OverridesOnlyProvidedValues(t *testing.T) {
 }
 
 func TestResolveBootstrapConfig_UsesNacos(t *testing.T) {
-	nacosSource := modeTestConfigSource{mode: "nacos"}
-	nacosAuth := modeTestAuthStore{}
-
 	result, err := resolveBootstrapConfig(bootstrapLoaders{
 		nacosAddr: "127.0.0.1:8848",
 		loadNacos: func() (*bootstrapConfig, error) {
 			return &bootstrapConfig{
 				cfg:          &config.Config{Port: 8080},
-				configSource: nacosSource,
-				authStore:    nacosAuth,
+				configSource: &nacos.NacosConfigStore{},
+				authStore:    &nacos.NacosAuthStore{},
 			}, nil
 		},
 	})
@@ -211,6 +161,48 @@ func TestResolveBootstrapConfig_FailsFastWhenNacosFails(t *testing.T) {
 	}
 }
 
+func TestBootstrapFromNacosStores_LoadsConfigAndAuths(t *testing.T) {
+	wantCfg := &config.Config{Port: 8080}
+
+	result, err := bootstrapFromNacosStores(
+		&nacos.NacosConfigStore{},
+		&nacos.NacosAuthStore{},
+		func() (*config.Config, error) { return wantCfg, nil },
+		func(context.Context) ([]*coreauth.Auth, error) {
+			return []*coreauth.Auth{{ID: "codex.json"}}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("bootstrapFromNacosStores() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("bootstrapFromNacosStores() returned nil result")
+	}
+	if result.cfg != wantCfg {
+		t.Fatalf("expected bootstrap config pointer to be preserved, got %#v", result.cfg)
+	}
+	if result.configSource == nil || result.authStore == nil {
+		t.Fatal("expected bootstrap result to preserve nacos stores")
+	}
+}
+
+func TestBootstrapFromNacosStores_FailsWhenAuthLoadFails(t *testing.T) {
+	_, err := bootstrapFromNacosStores(
+		&nacos.NacosConfigStore{},
+		&nacos.NacosAuthStore{},
+		func() (*config.Config, error) { return &config.Config{}, nil },
+		func(context.Context) ([]*coreauth.Auth, error) {
+			return nil, errors.New("nacos auths unavailable")
+		},
+	)
+	if err == nil {
+		t.Fatal("expected error when auth bootstrap fails")
+	}
+	if !strings.Contains(err.Error(), "load auths from nacos") || !strings.Contains(err.Error(), "nacos auths unavailable") {
+		t.Fatalf("expected auth bootstrap error, got %q", err)
+	}
+}
+
 func TestResolveBootstrapConfig_FailsWhenNacosAddrIsMissing(t *testing.T) {
 	nacosCalls := 0
 
@@ -219,8 +211,8 @@ func TestResolveBootstrapConfig_FailsWhenNacosAddrIsMissing(t *testing.T) {
 			nacosCalls++
 			return &bootstrapConfig{
 				cfg:          &config.Config{},
-				configSource: modeTestConfigSource{mode: "nacos"},
-				authStore:    modeTestAuthStore{},
+				configSource: &nacos.NacosConfigStore{},
+				authStore:    &nacos.NacosAuthStore{},
 			}, nil
 		},
 	})
@@ -241,7 +233,7 @@ func TestResolveBootstrapConfig_FailsWhenBootstrapAuthStoreIsMissing(t *testing.
 		loadNacos: func() (*bootstrapConfig, error) {
 			return &bootstrapConfig{
 				cfg:          &config.Config{},
-				configSource: modeTestConfigSource{mode: "nacos"},
+				configSource: &nacos.NacosConfigStore{},
 			}, nil
 		},
 	})
@@ -253,11 +245,20 @@ func TestResolveBootstrapConfig_FailsWhenBootstrapAuthStoreIsMissing(t *testing.
 	}
 }
 
-func TestConfigPathUsageMentionsNacosAndCockpitSubdir(t *testing.T) {
-	if !strings.Contains(configPathUsage, "Nacos") {
-		t.Fatalf("expected configPathUsage to mention Nacos, got %q", configPathUsage)
+func TestResolveBootstrapConfig_FailsWhenBootstrapConfigSourceIsMissing(t *testing.T) {
+	_, err := resolveBootstrapConfig(bootstrapLoaders{
+		nacosAddr: "127.0.0.1:8848",
+		loadNacos: func() (*bootstrapConfig, error) {
+			return &bootstrapConfig{
+				cfg:       &config.Config{},
+				authStore: &nacos.NacosAuthStore{},
+			}, nil
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error when bootstrap config source is missing")
 	}
-	if !strings.Contains(configPathUsage, "./cockpit/config.yaml") {
-		t.Fatalf("expected configPathUsage to mention ./cockpit/config.yaml, got %q", configPathUsage)
+	if !strings.Contains(err.Error(), "config source") {
+		t.Fatalf("expected missing config source error, got %q", err)
 	}
 }

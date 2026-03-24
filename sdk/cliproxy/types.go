@@ -1,5 +1,4 @@
 // Package cliproxy provides the core service implementation for Cockpit.
-// It includes service lifecycle management, authentication handling, file watching,
 // and integration with various AI service providers through a unified interface.
 package cliproxy
 
@@ -12,9 +11,6 @@ import (
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 )
 
-// TokenClientProvider loads clients backed by stored authentication tokens.
-// It provides an interface for loading authentication tokens from various sources
-// and creating clients for AI service providers.
 type TokenClientProvider interface {
 	// Load loads token-based clients from the configured source.
 	//
@@ -28,8 +24,6 @@ type TokenClientProvider interface {
 	Load(ctx context.Context, cfg *config.Config) (*TokenClientResult, error)
 }
 
-// TokenClientResult represents clients generated from persisted tokens.
-// It contains metadata about the loading operation and the number of successful authentications.
 type TokenClientResult struct {
 	// SuccessfulAuthed is the number of successfully authenticated clients.
 	SuccessfulAuthed int
@@ -56,18 +50,8 @@ type APIKeyClientResult struct {
 	CodexKeyCount int
 }
 
-// WatcherFactory creates a watcher for configuration and token changes.
 // The reload callback receives the updated configuration when changes are detected.
-//
-// Parameters:
-//   - configPath: The path to the configuration file to watch
-//   - authDir: The directory containing authentication tokens to watch
-//   - reload: The callback function to call when changes are detected
-//
-// Returns:
-//   - *WatcherWrapper: A watcher wrapper instance
-//   - error: An error if watcher creation fails
-type WatcherFactory func(configPath, authDir string, reload func(*config.Config), configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (*WatcherWrapper, error)
+type WatcherFactory func(reload func(*config.Config), configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (*WatcherWrapper, error)
 
 // WatcherWrapper exposes the subset of watcher methods required by the SDK.
 type WatcherWrapper struct {

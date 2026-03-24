@@ -1,9 +1,9 @@
 // Package watcher watches config/auth changes and triggers hot reloads.
-// It supports both Nacos-backed and static file-backed config sources.
 package watcher
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,12 +16,8 @@ import (
 )
 
 type Watcher struct {
-	configPath        string
-	authDir           string
 	config            *config.Config
 	clientsMutex      sync.RWMutex
-	configReloadMu    sync.Mutex
-	configReloadTimer *time.Timer
 	serverUpdateMu    sync.Mutex
 	serverUpdateTimer *time.Timer
 	serverUpdateLast  time.Time
@@ -30,11 +26,6 @@ type Watcher struct {
 	reloadCallback    func(*config.Config)
 	configSource      nacos.ConfigSource
 	authStore         nacos.WatchableAuthStore
-	lastAuthHashes    map[string]string
-	lastAuthContents  map[string]*coreauth.Auth
-	fileAuthsByPath   map[string]map[string]*coreauth.Auth
-	lastRemoveTimes   map[string]time.Time
-	lastConfigHash    string
 	authQueue         chan<- AuthUpdate
 	currentAuths      map[string]*coreauth.Auth
 	storeAuths        map[string]*coreauth.Auth
@@ -64,30 +55,30 @@ type AuthUpdate struct {
 }
 
 const (
-	// replaceCheckDelay is a short delay to allow atomic replace (rename) to settle
-	// before deciding whether a Remove event indicates a real deletion.
-	replaceCheckDelay        = 50 * time.Millisecond
-	configReloadDebounce     = 150 * time.Millisecond
-	authRemoveDebounceWindow = 1 * time.Second
-	serverUpdateDebounce     = 1 * time.Second
+	serverUpdateDebounce = 1 * time.Second
 )
 
-// NewWatcher creates a new file watcher instance
-func NewWatcher(configPath, authDir string, reloadCallback func(*config.Config), configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (*Watcher, error) {
+func NewWatcher(reloadCallback func(*config.Config), configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (*Watcher, error) {
 	w := &Watcher{
-		configPath:      configPath,
-		authDir:         authDir,
-		reloadCallback:  reloadCallback,
-		configSource:    configSource,
-		authStore:       authStore,
-		lastAuthHashes:  make(map[string]string),
-		fileAuthsByPath: make(map[string]map[string]*coreauth.Auth),
+		reloadCallback: reloadCallback,
+		configSource:   configSource,
+		authStore:      authStore,
 	}
 	w.dispatchCond = sync.NewCond(&w.dispatchMu)
 	return w, nil
 }
 
-// Start begins watching the configuration file and authentication directory
+func (w *Watcher) sourceMode() string {
+	if w == nil || w.configSource == nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(w.configSource.Mode()))
+}
+
+func (w *Watcher) usesNacosSource() bool {
+	return w.sourceMode() == "nacos"
+}
+
 func (w *Watcher) Start(ctx context.Context) error {
 	if w.configSource != nil {
 		if err := w.configSource.WatchConfig(func(cfg *config.Config) {
@@ -128,15 +119,13 @@ func (w *Watcher) Start(ctx context.Context) error {
 		}
 	}
 
-	w.reloadClients(true, false)
+	w.reloadClients(false)
 	return nil
 }
 
-// Stop stops the file watcher
 func (w *Watcher) Stop() error {
 	w.stopped.Store(true)
 	w.stopDispatch()
-	w.stopConfigReloadTimer()
 	w.stopServerUpdateTimer()
 	if w.configSource != nil {
 		w.configSource.StopWatch()
@@ -160,9 +149,6 @@ func (w *Watcher) SetAuthUpdateQueue(queue chan<- AuthUpdate) {
 	w.setAuthUpdateQueue(queue)
 }
 
-// DispatchRuntimeAuthUpdate allows external runtime providers (e.g., websocket-driven auths)
-// to push auth updates through the same queue used by file/config watchers.
-// Returns true if the update was enqueued; false if no queue is configured.
 func (w *Watcher) DispatchRuntimeAuthUpdate(update AuthUpdate) bool {
 	return w.dispatchRuntimeAuthUpdate(update)
 }
@@ -172,5 +158,5 @@ func (w *Watcher) SnapshotCoreAuths() []*coreauth.Auth {
 	w.clientsMutex.RLock()
 	cfg := w.config
 	w.clientsMutex.RUnlock()
-	return snapshotCoreAuths(cfg, w.authDir)
+	return snapshotCoreAuths(cfg)
 }

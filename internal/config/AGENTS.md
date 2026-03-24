@@ -15,7 +15,7 @@ Config schema and lifecycle. The config package is now split by concern across s
 - New provider config needs a `*Key` struct, sanitize path, and wiring into load/save flow.
 - Keep `config.example.yaml` aligned with behavior here.
 - Removed OAuth alias and exclusion maps should not be reintroduced here; config now exposes direct runtime settings only.
-- Persist through `ConfigSource.SaveConfig`; static mode must stay read-only and Nacos mode owns mutations.
+- Persist through `ConfigSource.SaveConfig`; Nacos owns mutations and config parsing should reject legacy/removed contract aliases instead of normalizing them.
 
 ## CROSS-SUBSYSTEM IMPACT
 Changing config shape usually requires watcher synthesizer and diff changes, plus any affected auth or runtime wiring.

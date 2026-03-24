@@ -117,7 +117,7 @@ func TestRefreshAuthFileUsage_UsesBackendOwnedProbeAndReturnsJSON(t *testing.T) 
 		},
 	})
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, manager)
+	h := NewHandlerWithoutPersistence(&config.Config{}, manager)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/auth-files/usage.json/usage", nil)
@@ -149,7 +149,7 @@ func TestRefreshAuthFileUsage_ReturnsNotFoundWhenUsageUnavailable(t *testing.T) 
 	gin.SetMode(gin.TestMode)
 	manager := coreauth.NewManager(nil, nil, nil)
 	registerManagedCodexAuth(t, manager, &coreauth.Auth{ID: "usage.json", FileName: "usage.json", Provider: "other"})
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, manager)
+	h := NewHandlerWithoutPersistence(&config.Config{}, manager)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/auth-files/usage.json/usage", nil)
@@ -164,7 +164,7 @@ func TestRefreshAuthFileUsage_ReturnsNotFoundWhenUsageUnavailable(t *testing.T) 
 
 func TestRefreshAuthFileUsage_ReturnsNotFoundForUnknownAuthFile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, coreauth.NewManager(nil, nil, nil))
+	h := NewHandlerWithoutPersistence(&config.Config{}, coreauth.NewManager(nil, nil, nil))
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/auth-files/missing.json/usage", nil)
@@ -195,7 +195,7 @@ func TestRefreshAuthFileUsage_PropagatesUpstreamErrors(t *testing.T) {
 		},
 	})
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{}, manager)
+	h := NewHandlerWithoutPersistence(&config.Config{}, manager)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/auth-files/usage.json/usage", nil)

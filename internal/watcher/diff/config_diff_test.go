@@ -11,7 +11,6 @@ func TestBuildConfigChangeDetails_RetainedSurface(t *testing.T) {
 	oldCfg := &config.Config{
 		Host:                "0.0.0.0",
 		Port:                1000,
-		AuthDir:             "/old",
 		DisableCooling:      false,
 		RequestRetry:        1,
 		MaxRetryCredentials: 1,
@@ -36,7 +35,6 @@ func TestBuildConfigChangeDetails_RetainedSurface(t *testing.T) {
 	newCfg := &config.Config{
 		Host:                "127.0.0.1",
 		Port:                2000,
-		AuthDir:             "/new",
 		DisableCooling:      true,
 		RequestRetry:        2,
 		MaxRetryCredentials: 3,
@@ -62,7 +60,6 @@ func TestBuildConfigChangeDetails_RetainedSurface(t *testing.T) {
 	changes := BuildConfigChangeDetails(oldCfg, newCfg)
 	expectContains(t, changes, "host: 0.0.0.0 -> 127.0.0.1")
 	expectContains(t, changes, "port: 1000 -> 2000")
-	expectContains(t, changes, "auth-dir: /old -> /new")
 	expectContains(t, changes, "disable-cooling: false -> true")
 	expectContains(t, changes, "request-retry: 1 -> 2")
 	expectContains(t, changes, "max-retry-credentials: 1 -> 3")

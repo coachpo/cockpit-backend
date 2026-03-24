@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
-	"github.com/coachpo/cockpit-backend/internal/util"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
@@ -122,22 +121,25 @@ func isDirWritable(dir string) bool {
 // ResolveLogDirectory determines the directory used for application logs.
 func ResolveLogDirectory(cfg *config.Config) string {
 	logDir := "logs"
-	if base := util.WritablePath(); base != "" {
+	if base := writablePath(); base != "" {
 		return filepath.Join(base, "logs")
 	}
-	if cfg == nil {
-		return logDir
-	}
 	if !isDirWritable(logDir) {
-		authDir, err := util.ResolveAuthDir(cfg.AuthDir)
-		if err != nil {
-			log.Warnf("Failed to resolve auth-dir %q for log directory: %v", cfg.AuthDir, err)
-		}
-		if authDir != "" {
-			logDir = filepath.Join(authDir, "logs")
-		}
+		return filepath.Join(os.TempDir(), "cockpit", "logs")
 	}
 	return logDir
+}
+
+func writablePath() string {
+	for _, key := range []string{"WRITABLE_PATH", "writable_path"} {
+		if value, ok := os.LookupEnv(key); ok {
+			trimmed := strings.TrimSpace(value)
+			if trimmed != "" {
+				return filepath.Clean(trimmed)
+			}
+		}
+	}
+	return ""
 }
 
 func ConfigureLogOutput(cfg *config.Config) error {

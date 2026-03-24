@@ -86,8 +86,7 @@ func TestRunOAuthHelper_StartsSessionAndRedirectsCallback(t *testing.T) {
 	t.Parallel()
 
 	type createRequest struct {
-		Provider            string `json:"provider"`
-		LocalCallbackHelper bool   `json:"local_callback_helper"`
+		Provider string `json:"provider"`
 	}
 
 	var (
@@ -176,9 +175,6 @@ func TestRunOAuthHelper_StartsSessionAndRedirectsCallback(t *testing.T) {
 	if capturedCreateReq.Provider != defaultOAuthHelperProvider {
 		t.Fatalf("expected provider %q, got %+v", defaultOAuthHelperProvider, capturedCreateReq)
 	}
-	if !capturedCreateReq.LocalCallbackHelper {
-		t.Fatalf("expected helper mode request body, got %+v", capturedCreateReq)
-	}
 	if createCalls != 1 {
 		t.Fatalf("expected one oauth session create call, got %d", createCalls)
 	}
@@ -199,8 +195,7 @@ func TestRunOAuthHelper_DefaultContinueStartsAnotherRoundWithSameTarget(t *testi
 	t.Parallel()
 
 	type createRequest struct {
-		Provider            string `json:"provider"`
-		LocalCallbackHelper bool   `json:"local_callback_helper"`
+		Provider string `json:"provider"`
 	}
 
 	var (
@@ -221,9 +216,6 @@ func TestRunOAuthHelper_DefaultContinueStartsAnotherRoundWithSameTarget(t *testi
 			var req createRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				t.Fatalf("decode create request: %v", err)
-			}
-			if !req.LocalCallbackHelper {
-				t.Fatalf("expected helper flag in create request, got %+v", req)
 			}
 			state := fmt.Sprintf("state-%d", callNumber)
 			mu.Lock()

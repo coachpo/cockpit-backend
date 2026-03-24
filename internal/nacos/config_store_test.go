@@ -92,7 +92,7 @@ func TestNacosConfigStoreSaveConfigRejectsCodexKeyWithoutBaseURL(t *testing.T) {
 }
 
 func TestNacosConfigStoreWatchConfigIgnoresRemovedFieldOnlyUpdates(t *testing.T) {
-	client := &stubConfigClient{config: "host: \"\"\nport: 8080\nauth-dir: /tmp/auth\n"}
+	client := &stubConfigClient{config: "host: \"\"\nport: 8080\n"}
 	store := &NacosConfigStore{
 		client:       &Client{group: "DEFAULT_GROUP"},
 		configClient: client,
@@ -111,7 +111,7 @@ func TestNacosConfigStoreWatchConfigIgnoresRemovedFieldOnlyUpdates(t *testing.T)
 		t.Fatal("expected ListenConfig to register an OnChange callback")
 	}
 
-	client.listenFunc("public", "DEFAULT_GROUP", nacosConfigDataID, "host: \"\"\nport: 8080\nauth-dir: /tmp/auth\nrequest-log: true\n")
+	client.listenFunc("public", "DEFAULT_GROUP", nacosConfigDataID, "host: \"\"\nport: 8080\nrequest-log: true\n")
 	if callbackCalls != 1 {
 		t.Fatalf("expected removed-field-only update to be ignored, got %d callbacks", callbackCalls)
 	}

@@ -1,11 +1,9 @@
 // Package cliproxy provides the core service implementation for Cockpit.
-// It includes service lifecycle management, authentication handling, file watching,
 // and integration with various AI service providers through a unified interface.
 package cliproxy
 
 import (
 	"fmt"
-	"strings"
 
 	configaccess "github.com/coachpo/cockpit-backend/internal/access/config_access"
 	"github.com/coachpo/cockpit-backend/internal/api"
@@ -18,13 +16,9 @@ import (
 
 // Builder constructs a Service instance with customizable providers.
 // It provides a fluent interface for configuring all aspects of the service
-// including authentication, file watching, HTTP server options, and lifecycle hooks.
 type Builder struct {
 	// cfg holds the application configuration.
 	cfg *config.Config
-
-	// configPath is the path to the configuration file.
-	configPath string
 
 	// tokenProvider handles loading token-based clients.
 	tokenProvider TokenClientProvider
@@ -32,7 +26,6 @@ type Builder struct {
 	// apiKeyProvider handles loading API key-based clients.
 	apiKeyProvider APIKeyClientProvider
 
-	// watcherFactory creates file watcher instances.
 	watcherFactory WatcherFactory
 	configSource   nacos.ConfigSource
 	authStore      nacos.WatchableAuthStore
@@ -83,18 +76,6 @@ func NewBuilder() *Builder {
 //   - *Builder: The builder instance for method chaining
 func (b *Builder) WithConfig(cfg *config.Config) *Builder {
 	b.cfg = cfg
-	return b
-}
-
-// WithConfigPath sets the absolute configuration file path used for reload watching.
-//
-// Parameters:
-//   - path: The absolute path to the configuration file
-//
-// Returns:
-//   - *Builder: The builder instance for method chaining
-func (b *Builder) WithConfigPath(path string) *Builder {
-	b.configPath = path
 	return b
 }
 
@@ -173,13 +154,9 @@ func (b *Builder) Build() (*Service, error) {
 	if b.cfg == nil {
 		return nil, fmt.Errorf("cockpit: configuration is required")
 	}
-	if b.configPath == "" {
-		return nil, fmt.Errorf("cockpit: configuration path is required")
-	}
-
 	tokenProvider := b.tokenProvider
 	if tokenProvider == nil {
-		tokenProvider = NewFileTokenClientProvider()
+		tokenProvider = NewTokenClientProvider()
 	}
 
 	apiKeyProvider := b.apiKeyProvider
@@ -217,13 +194,17 @@ func (b *Builder) Build() (*Service, error) {
 
 	coreManager := b.coreManager
 	if coreManager == nil {
-		strategy := ""
+		normalizedStrategy := "round-robin"
 		if b.cfg != nil {
-			strategy = strings.ToLower(strings.TrimSpace(b.cfg.Routing.Strategy))
+			var ok bool
+			normalizedStrategy, ok = config.NormalizeRoutingStrategy(b.cfg.Routing.Strategy)
+			if !ok {
+				return nil, fmt.Errorf("cockpit: invalid routing strategy %q", b.cfg.Routing.Strategy)
+			}
 		}
 		var selector coreauth.Selector
-		switch strategy {
-		case "fill-first", "fillfirst", "ff":
+		switch normalizedStrategy {
+		case "fill-first":
 			selector = &coreauth.FillFirstSelector{}
 		default:
 			selector = &coreauth.RoundRobinSelector{}
@@ -237,7 +218,6 @@ func (b *Builder) Build() (*Service, error) {
 
 	service := &Service{
 		cfg:            b.cfg,
-		configPath:     b.configPath,
 		configSource:   configSource,
 		authStore:      authStore,
 		tokenProvider:  tokenProvider,

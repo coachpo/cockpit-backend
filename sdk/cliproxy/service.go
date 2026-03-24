@@ -1,5 +1,4 @@
 // Package cliproxy provides the core service implementation for Cockpit.
-// It includes service lifecycle management, authentication handling, file watching,
 // and integration with various AI service providers through a unified interface.
 package cliproxy
 
@@ -7,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -16,7 +14,6 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	"github.com/coachpo/cockpit-backend/internal/registry"
-	"github.com/coachpo/cockpit-backend/internal/util"
 	"github.com/coachpo/cockpit-backend/internal/watcher"
 	"github.com/coachpo/cockpit-backend/internal/wsrelay"
 	sdkaccess "github.com/coachpo/cockpit-backend/sdk/access"
@@ -26,7 +23,6 @@ import (
 )
 
 // Service wraps the proxy server lifecycle so external programs can embed the CLI proxy.
-// It manages the complete lifecycle including authentication, file watching, HTTP server,
 // and integration with various AI service providers.
 type Service struct {
 	// cfg holds the current application configuration.
@@ -34,9 +30,6 @@ type Service struct {
 
 	// cfgMu protects concurrent access to the configuration.
 	cfgMu sync.RWMutex
-
-	// configPath is the path to the configuration file.
-	configPath string
 
 	configSource nacos.ConfigSource
 	authStore    nacos.WatchableAuthStore
@@ -47,7 +40,6 @@ type Service struct {
 	// apiKeyProvider handles loading API key-based clients.
 	apiKeyProvider APIKeyClientProvider
 
-	// watcherFactory creates file watcher instances.
 	watcherFactory WatcherFactory
 
 	// hooks provides lifecycle callbacks.
@@ -62,7 +54,6 @@ type Service struct {
 	// serverErr channel for server startup/shutdown errors.
 	serverErr chan error
 
-	// watcher handles file system monitoring.
 	watcher *WatcherWrapper
 
 	// watcherCancel cancels the watcher context.
@@ -96,29 +87,7 @@ func newDefaultAuthManager(store nacos.WatchableAuthStore) *sdkAuth.Manager {
 	)
 }
 
-func (s *Service) applyRuntimeAuthDir() error {
-	if s == nil || s.cfg == nil {
-		return nil
-	}
-
-	mode := ""
-	if s.configSource != nil {
-		mode = s.configSource.Mode()
-	}
-
-	resolvedAuthDir, err := util.ResolveRuntimeAuthDir(s.cfg.AuthDir, mode)
-	if err != nil {
-		return fmt.Errorf("cockpit: failed to resolve auth directory: %w", err)
-	}
-
-	s.cfgMu.Lock()
-	s.cfg.AuthDir = resolvedAuthDir
-	s.cfgMu.Unlock()
-	return nil
-}
-
 // Run starts the service and blocks until the context is cancelled or the server stops.
-// It initializes all components including authentication, file watching, HTTP server,
 // and starts processing requests. The method blocks until the context is cancelled.
 //
 // Parameters:
@@ -142,14 +111,6 @@ func (s *Service) Run(ctx context.Context) error {
 		}
 	}()
 
-	if err := s.applyRuntimeAuthDir(); err != nil {
-		return err
-	}
-
-	if err := s.ensureAuthDir(); err != nil {
-		return err
-	}
-
 	s.applyRetryConfig(s.cfg)
 
 	if s.coreManager != nil {
@@ -170,7 +131,7 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 
 	opts := append(s.serverOptions, api.WithConfigSaver(s.configSource.SaveConfig))
-	s.server = api.NewServer(s.cfg, s.coreManager, s.accessManager, s.configPath, s.authStore, opts...)
+	s.server = api.NewServer(s.cfg, s.coreManager, s.accessManager, s.authStore, opts...)
 
 	if s.authManager == nil {
 		s.authManager = newDefaultAuthManager(s.authStore)
@@ -274,19 +235,11 @@ func (s *Service) Run(ctx context.Context) error {
 		}
 
 		nextStrategy := strings.ToLower(strings.TrimSpace(newCfg.Routing.Strategy))
-		normalizeStrategy := func(strategy string) string {
-			switch strategy {
-			case "fill-first", "fillfirst", "ff":
-				return "fill-first"
-			default:
-				return "round-robin"
-			}
-		}
-		previousStrategy = normalizeStrategy(previousStrategy)
-		nextStrategy = normalizeStrategy(nextStrategy)
-		if s.coreManager != nil && previousStrategy != nextStrategy {
+		normalizedPreviousStrategy, okPrevious := config.NormalizeRoutingStrategy(previousStrategy)
+		normalizedNextStrategy, okNext := config.NormalizeRoutingStrategy(nextStrategy)
+		if s.coreManager != nil && okPrevious && okNext && normalizedPreviousStrategy != normalizedNextStrategy {
 			var selector coreauth.Selector
-			switch nextStrategy {
+			switch normalizedNextStrategy {
 			case "fill-first":
 				selector = &coreauth.FillFirstSelector{}
 			default:
@@ -308,7 +261,7 @@ func (s *Service) Run(ctx context.Context) error {
 		s.rebindExecutors()
 	}
 
-	watcherWrapper, err = s.watcherFactory(s.configPath, s.cfg.AuthDir, reloadCallback, s.configSource, s.authStore)
+	watcherWrapper, err = s.watcherFactory(reloadCallback, s.configSource, s.authStore)
 	if err != nil {
 		return fmt.Errorf("cockpit: failed to create watcher: %w", err)
 	}
@@ -324,7 +277,7 @@ func (s *Service) Run(ctx context.Context) error {
 	if err = watcherWrapper.Start(watcherCtx); err != nil {
 		return fmt.Errorf("cockpit: failed to start watcher: %w", err)
 	}
-	log.Info("file watcher started for config and auth directory changes")
+	log.Info("config/auth watcher started")
 
 	// Prefer core auth manager auto refresh if available.
 	if s.coreManager != nil {
@@ -369,7 +322,7 @@ func (s *Service) Shutdown(ctx context.Context) error {
 		}
 		if s.watcher != nil {
 			if err := s.watcher.Stop(); err != nil {
-				log.Errorf("failed to stop file watcher: %v", err)
+				log.Errorf("failed to stop watcher: %v", err)
 				shutdownErr = err
 			}
 		}
@@ -398,26 +351,4 @@ func (s *Service) Shutdown(ctx context.Context) error {
 		}
 	})
 	return shutdownErr
-}
-
-func (s *Service) ensureAuthDir() error {
-	if s == nil || s.cfg == nil || strings.TrimSpace(s.cfg.AuthDir) == "" {
-		return nil
-	}
-
-	info, err := os.Stat(s.cfg.AuthDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if mkErr := os.MkdirAll(s.cfg.AuthDir, 0o755); mkErr != nil {
-				return fmt.Errorf("cockpit: failed to create auth directory %s: %w", s.cfg.AuthDir, mkErr)
-			}
-			log.Infof("created missing auth directory: %s", s.cfg.AuthDir)
-			return nil
-		}
-		return fmt.Errorf("cockpit: error checking auth directory %s: %w", s.cfg.AuthDir, err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("cockpit: auth path exists but is not a directory: %s", s.cfg.AuthDir)
-	}
-	return nil
 }

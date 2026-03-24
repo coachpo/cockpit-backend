@@ -28,6 +28,5 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.POST("/auth-files/:name/usage", s.mgmt.RefreshAuthFileUsage)
 		mgmt.POST("/oauth-sessions", s.mgmt.CreateOAuthSession)
 		mgmt.GET("/oauth-sessions/:state", s.mgmt.GetOAuthSessionStatus)
-		mgmt.POST("/oauth-sessions/:state/callback", s.mgmt.PostOAuthSessionCallback)
 	}
 }

@@ -12,7 +12,7 @@ Persistent management API. Owns config edits, auth-file lifecycle, upstream API-
 - `oauth_sessions.go`, `oauth_callback.go`: in-memory OAuth session tracking and callback completion.
 - `api_call.go`: upstream API-call proxying through managed auth files.
 - `quota.go`: switch-project quota toggle.
-- `api_call_test.go`, `auth_files_delete_test.go`, `auth_files_oauth_test.go`, `config_lists_codex_test.go`, `mutation_static_mode_test.go`, `test_store_test.go`: package-local behavior tests.
+- `api_call_test.go`, `auth_files_delete_test.go`, `auth_files_oauth_test.go`, `config_lists_codex_test.go`, and `test_store_test.go`: package-local behavior tests.
 
 ## LOCAL CONVENTIONS
 - Persist config through the injected `ConfigSource.SaveConfig`, not plain marshal/write code.

@@ -9,8 +9,8 @@ import (
 	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
 )
 
-func defaultWatcherFactory(configPath, authDir string, reload func(*config.Config), configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (*WatcherWrapper, error) {
-	w, err := watcher.NewWatcher(configPath, authDir, reload, configSource, authStore)
+func defaultWatcherFactory(reload func(*config.Config), configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (*WatcherWrapper, error) {
+	w, err := watcher.NewWatcher(reload, configSource, authStore)
 	if err != nil {
 		return nil, err
 	}

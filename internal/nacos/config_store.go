@@ -1,7 +1,6 @@
 package nacos
 
 import (
-	"bytes"
 	"crypto/md5"
 	"fmt"
 	"sync"
@@ -175,11 +174,9 @@ func (s *NacosConfigStore) getConfig() (string, error) {
 }
 
 func (s *NacosConfigStore) parseConfig(raw string) (*config.Config, string, error) {
-	cfg := &config.Config{Host: "", DisableCooling: false}
-	decoder := yaml.NewDecoder(bytes.NewReader([]byte(raw)))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(cfg); err != nil {
-		return nil, "", fmt.Errorf("nacos config store: unmarshal config: %w", err)
+	cfg, err := config.ParseConfigYAML([]byte(raw))
+	if err != nil {
+		return nil, "", fmt.Errorf("nacos config store: %w", err)
 	}
 	if err := sanitizeConfig(cfg); err != nil {
 		return nil, "", err

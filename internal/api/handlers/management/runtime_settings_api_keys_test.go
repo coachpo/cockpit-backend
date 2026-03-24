@@ -14,11 +14,11 @@ import (
 func TestGetRuntimeSettings_ReturnsAggregatedResource(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{
+	h := NewHandlerWithoutPersistence(&config.Config{
 		WebsocketAuth:    true,
 		RequestRetry:     3,
 		MaxRetryInterval: 45,
-		Routing:          config.RoutingConfig{Strategy: "fillfirst"},
+		Routing:          config.RoutingConfig{Strategy: "fill-first"},
 		QuotaExceeded:    config.QuotaExceeded{SwitchProject: true},
 	}, nil)
 
@@ -51,7 +51,7 @@ func TestGetRuntimeSettings_ReturnsAggregatedResource(t *testing.T) {
 func TestPutRuntimeSettings_UpdatesAllFieldsAndPersists(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{
+	h := NewHandlerWithoutPersistence(&config.Config{
 		Routing:       config.RoutingConfig{Strategy: "round-robin"},
 		QuotaExceeded: config.QuotaExceeded{},
 	}, nil)
@@ -59,7 +59,7 @@ func TestPutRuntimeSettings_UpdatesAllFieldsAndPersists(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/runtime-settings", bytes.NewBufferString(`{"ws-auth":true,"request-retry":4,"max-retry-interval":90,"routing-strategy":"fillfirst","switch-project":true}`))
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/runtime-settings", bytes.NewBufferString(`{"ws-auth":true,"request-retry":4,"max-retry-interval":90,"routing-strategy":"fill-first","switch-project":true}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
 
 	h.PutRuntimeSettings(ctx)
@@ -72,10 +72,36 @@ func TestPutRuntimeSettings_UpdatesAllFieldsAndPersists(t *testing.T) {
 	}
 }
 
+func TestPutRuntimeSettings_LegacyStrategyRejectedWithoutMutation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	h := NewHandlerWithoutPersistence(&config.Config{
+		RequestRetry:     1,
+		MaxRetryInterval: 30,
+		Routing:          config.RoutingConfig{Strategy: "round-robin"},
+		QuotaExceeded:    config.QuotaExceeded{},
+	}, nil)
+	h.SetConfigSaver(func(*config.Config) error { return nil })
+
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/runtime-settings", bytes.NewBufferString(`{"ws-auth":true,"request-retry":4,"max-retry-interval":90,"routing-strategy":"fillfirst","switch-project":true}`))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	h.PutRuntimeSettings(ctx)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d with body %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+	if h.cfg.WebsocketAuth || h.cfg.RequestRetry != 1 || h.cfg.MaxRetryInterval != 30 || h.cfg.Routing.Strategy != "round-robin" || h.cfg.QuotaExceeded.SwitchProject {
+		t.Fatalf("expected config to remain unchanged, got %#v", h.cfg)
+	}
+}
+
 func TestPutRuntimeSettings_InvalidStrategyRejectedWithoutMutation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{
+	h := NewHandlerWithoutPersistence(&config.Config{
 		RequestRetry:     1,
 		MaxRetryInterval: 30,
 		Routing:          config.RoutingConfig{Strategy: "round-robin"},
@@ -101,7 +127,7 @@ func TestPutRuntimeSettings_InvalidStrategyRejectedWithoutMutation(t *testing.T)
 func TestGetAPIKeys_ReturnsItemsEnvelope(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{SDKConfig: config.SDKConfig{APIKeys: []string{"first", "second"}}}, nil)
+	h := NewHandlerWithoutPersistence(&config.Config{SDKConfig: config.SDKConfig{APIKeys: []string{"first", "second"}}}, nil)
 
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
@@ -127,7 +153,7 @@ func TestGetAPIKeys_ReturnsItemsEnvelope(t *testing.T) {
 func TestPutAPIKeys_RequiresItemsEnvelope(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	h := NewHandlerWithoutConfigFilePath(&config.Config{SDKConfig: config.SDKConfig{APIKeys: []string{"existing"}}}, nil)
+	h := NewHandlerWithoutPersistence(&config.Config{SDKConfig: config.SDKConfig{APIKeys: []string{"existing"}}}, nil)
 	h.SetConfigSaver(func(*config.Config) error { return nil })
 
 	rec := httptest.NewRecorder()

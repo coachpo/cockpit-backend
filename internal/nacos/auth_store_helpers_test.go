@@ -1,9 +1,12 @@
 package nacos
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseAuthEntriesSupportsObjectMap(t *testing.T) {
-	raw := `{"alpha":{"type":"codex","email":"alpha@example.com","disabled":false}}`
+	raw := `{"alpha":{"file_name":"alpha.json","type":"codex","email":"alpha@example.com","disabled":false}}`
 
 	entries, err := parseAuthEntries(raw)
 	if err != nil {
@@ -18,30 +21,40 @@ func TestParseAuthEntriesSupportsObjectMap(t *testing.T) {
 	}
 }
 
+func TestParseAuthEntriesRejectsMissingFileName(t *testing.T) {
+	raw := `{"alpha":{"type":"codex","email":"alpha@example.com","disabled":false}}`
+
+	_, err := parseAuthEntries(raw)
+	if err == nil {
+		t.Fatal("expected parseAuthEntries to reject missing file_name")
+	}
+	if !strings.Contains(err.Error(), "missing file_name") {
+		t.Fatalf("expected missing file_name error, got %v", err)
+	}
+}
+
 func TestParseAuthEntriesSupportsJSONArray(t *testing.T) {
 	raw := `[
-		{"file_name":"alpha.json","type":"codex","email":"alpha@example.com","disabled":false},
-		{"account_id":"acct-2","type":"codex","email":"beta@example.com","disabled":true}
+		{"id":"alpha.json","type":"codex","email":"alpha@example.com","disabled":false}
 	]`
 
-	entries, err := parseAuthEntries(raw)
-	if err != nil {
-		t.Fatalf("parseAuthEntries returned error: %v", err)
+	_, err := parseAuthEntries(raw)
+	if err == nil {
+		t.Fatal("expected parseAuthEntries to reject JSON arrays")
 	}
+	if !strings.Contains(err.Error(), "cannot unmarshal array") {
+		t.Fatalf("expected array rejection error, got %v", err)
+	}
+}
 
-	if len(entries) != 2 {
-		t.Fatalf("expected 2 auth entries, got %d", len(entries))
-	}
+func TestParseAuthEntriesRejectsPathLikeExplicitIdentifiers(t *testing.T) {
+	raw := `{"nested/alpha.json":{"type":"codex","email":"alpha@example.com","disabled":false}}`
 
-	if got := stringValue(entries["alpha.json"], "email"); got != "alpha@example.com" {
-		t.Fatalf("expected alpha.json email alpha@example.com, got %q", got)
+	_, err := parseAuthEntries(raw)
+	if err == nil {
+		t.Fatal("expected parseAuthEntries to reject path-like auth id")
 	}
-
-	derivedID := "codex-acct-2.json"
-	if got := stringValue(entries[derivedID], "email"); got != "beta@example.com" {
-		t.Fatalf("expected %s email beta@example.com, got %q", derivedID, got)
-	}
-	if disabled, _ := entries[derivedID]["disabled"].(bool); !disabled {
-		t.Fatalf("expected %s to stay disabled", derivedID)
+	if !strings.Contains(err.Error(), "invalid auth id") {
+		t.Fatalf("expected invalid auth id error, got %v", err)
 	}
 }

@@ -13,7 +13,7 @@ Private auth implementations. The checked-in provider flow is Codex only; placeh
 - Keep provider-specific flows inside the provider folder: auth entrypoints, token parsing, OAuth server, PKCE helpers, and provider errors.
 - Avoid cross-provider imports. Shared contracts belong at the package root, not copied between provider dirs.
 - Adding a provider is never auth-only. Expect follow-up edits in `internal/config/`, `internal/watcher/`, and often runtime/auth orchestration layers.
-- Preserve file-backed token behavior expected by watcher synthesis and SDK token stores.
+- Preserve the retained token metadata and runtime contracts expected by watcher synthesis and SDK token stores.
 - Child rules in `codex/AGENTS.md` override this file inside the provider implementation.
 
 ## RECENT CLEANUPS
