@@ -130,15 +130,17 @@ func renderOAuthCallbackHTML(c *gin.Context, result oauthSessionCompletionResult
 	title := "Authentication failed"
 	heading := "Authentication failed"
 	message := strings.TrimSpace(result.Error)
+	closeScript := ""
 	if strings.TrimSpace(result.AuthFile) != "" {
 		title = "Authentication successful"
 		heading = "Authentication successful"
-		message = "You can close this window and return to Cockpit."
+		message = "Return to Cockpit. This window is closing."
+		closeScript = "<script>setTimeout(function(){window.close();},750);</script>"
 	} else if message == "" {
 		message = "Authentication failed. Check Cockpit for details."
 	}
 
-	body := "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>" + html.EscapeString(title) + "</title><script>setTimeout(function(){window.close();},5000);</script></head><body><h1>" + html.EscapeString(heading) + "</h1><p>" + html.EscapeString(message) + "</p><p>You can close this window now. It will close automatically in 5 seconds.</p></body></html>"
+	body := "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>" + html.EscapeString(title) + "</title>" + closeScript + "</head><body><h1>" + html.EscapeString(heading) + "</h1><p>" + html.EscapeString(message) + "</p></body></html>"
 	c.Data(result.StatusCode, "text/html; charset=utf-8", []byte(body))
 }
 

@@ -456,8 +456,12 @@ func TestGetOAuthCallback_UsesStoredRedirectURIForExchangeAndReturnsHTML(t *test
 	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/html") {
 		t.Fatalf("expected html content type, got %q", got)
 	}
-	if !strings.Contains(rec.Body.String(), "Authentication successful") || !strings.Contains(rec.Body.String(), "window.close") {
-		t.Fatalf("expected success html response, got %s", rec.Body.String())
+	body := rec.Body.String()
+	if !strings.Contains(body, "Authentication successful") || !strings.Contains(body, "Return to Cockpit. This window is closing.") || !strings.Contains(body, "window.close") {
+		t.Fatalf("expected simplified success html response, got %s", body)
+	}
+	if strings.Contains(body, "You can close this window now") {
+		t.Fatalf("expected verbose success copy to be removed, got %s", body)
 	}
 	if fake.exchangeRedirectURI != codex.RedirectURI {
 		t.Fatalf("expected stored redirect uri to be reused during exchange, got %q", fake.exchangeRedirectURI)
