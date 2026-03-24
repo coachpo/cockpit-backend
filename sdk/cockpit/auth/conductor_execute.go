@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 )
 
-func discardStreamChunks(ch <-chan cliproxyexecutor.StreamChunk) {
+func discardStreamChunks(ch <-chan cockpitexecutor.StreamChunk) {
 	if ch == nil {
 		return
 	}
@@ -18,14 +18,14 @@ func discardStreamChunks(ch <-chan cliproxyexecutor.StreamChunk) {
 	}()
 }
 
-func readStreamBootstrap(ctx context.Context, ch <-chan cliproxyexecutor.StreamChunk) ([]cliproxyexecutor.StreamChunk, bool, error) {
+func readStreamBootstrap(ctx context.Context, ch <-chan cockpitexecutor.StreamChunk) ([]cockpitexecutor.StreamChunk, bool, error) {
 	if ch == nil {
 		return nil, true, nil
 	}
-	buffered := make([]cliproxyexecutor.StreamChunk, 0, 1)
+	buffered := make([]cockpitexecutor.StreamChunk, 0, 1)
 	for {
 		var (
-			chunk cliproxyexecutor.StreamChunk
+			chunk cockpitexecutor.StreamChunk
 			ok    bool
 		)
 		if ctx != nil {
@@ -50,17 +50,17 @@ func readStreamBootstrap(ctx context.Context, ch <-chan cliproxyexecutor.StreamC
 	}
 }
 
-func (m *Manager) wrapStreamResult(ctx context.Context, auth *Auth, provider, routeModel string, headers http.Header, buffered []cliproxyexecutor.StreamChunk, remaining <-chan cliproxyexecutor.StreamChunk) *cliproxyexecutor.StreamResult {
-	out := make(chan cliproxyexecutor.StreamChunk)
+func (m *Manager) wrapStreamResult(ctx context.Context, auth *Auth, provider, routeModel string, headers http.Header, buffered []cockpitexecutor.StreamChunk, remaining <-chan cockpitexecutor.StreamChunk) *cockpitexecutor.StreamResult {
+	out := make(chan cockpitexecutor.StreamChunk)
 	go func() {
 		defer close(out)
 		var failed bool
 		forward := true
-		emit := func(chunk cliproxyexecutor.StreamChunk) bool {
+		emit := func(chunk cockpitexecutor.StreamChunk) bool {
 			if chunk.Err != nil && !failed {
 				failed = true
 				rerr := &Error{Message: chunk.Err.Error()}
-				if se, ok := errors.AsType[cliproxyexecutor.StatusError](chunk.Err); ok && se != nil {
+				if se, ok := errors.AsType[cockpitexecutor.StatusError](chunk.Err); ok && se != nil {
 					rerr.HTTPStatus = se.StatusCode()
 				}
 				m.MarkResult(ctx, Result{AuthID: auth.ID, Provider: provider, Model: routeModel, Success: false, Error: rerr})
@@ -96,10 +96,10 @@ func (m *Manager) wrapStreamResult(ctx context.Context, auth *Auth, provider, ro
 			m.MarkResult(ctx, Result{AuthID: auth.ID, Provider: provider, Model: routeModel, Success: true})
 		}
 	}()
-	return &cliproxyexecutor.StreamResult{Headers: headers, Chunks: out}
+	return &cockpitexecutor.StreamResult{Headers: headers, Chunks: out}
 }
 
-func (m *Manager) executeStreamWithModelPool(ctx context.Context, executor ProviderExecutor, auth *Auth, provider string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, routeModel string) (*cliproxyexecutor.StreamResult, error) {
+func (m *Manager) executeStreamWithModelPool(ctx context.Context, executor ProviderExecutor, auth *Auth, provider string, req cockpitexecutor.Request, opts cockpitexecutor.Options, routeModel string) (*cockpitexecutor.StreamResult, error) {
 	if executor == nil {
 		return nil, &Error{Code: "executor_not_found", Message: "executor not registered"}
 	}
@@ -114,7 +114,7 @@ func (m *Manager) executeStreamWithModelPool(ctx context.Context, executor Provi
 				return nil, errCtx
 			}
 			rerr := &Error{Message: errStream.Error()}
-			if se, ok := errors.AsType[cliproxyexecutor.StatusError](errStream); ok && se != nil {
+			if se, ok := errors.AsType[cockpitexecutor.StatusError](errStream); ok && se != nil {
 				rerr.HTTPStatus = se.StatusCode()
 			}
 			result := Result{AuthID: auth.ID, Provider: provider, Model: routeModel, Success: false, Error: rerr}
@@ -135,7 +135,7 @@ func (m *Manager) executeStreamWithModelPool(ctx context.Context, executor Provi
 			}
 			if isRequestInvalidError(bootstrapErr) {
 				rerr := &Error{Message: bootstrapErr.Error()}
-				if se, ok := errors.AsType[cliproxyexecutor.StatusError](bootstrapErr); ok && se != nil {
+				if se, ok := errors.AsType[cockpitexecutor.StatusError](bootstrapErr); ok && se != nil {
 					rerr.HTTPStatus = se.StatusCode()
 				}
 				result := Result{AuthID: auth.ID, Provider: provider, Model: routeModel, Success: false, Error: rerr}
@@ -146,7 +146,7 @@ func (m *Manager) executeStreamWithModelPool(ctx context.Context, executor Provi
 			}
 			if idx < len(execModels)-1 {
 				rerr := &Error{Message: bootstrapErr.Error()}
-				if se, ok := errors.AsType[cliproxyexecutor.StatusError](bootstrapErr); ok && se != nil {
+				if se, ok := errors.AsType[cockpitexecutor.StatusError](bootstrapErr); ok && se != nil {
 					rerr.HTTPStatus = se.StatusCode()
 				}
 				result := Result{AuthID: auth.ID, Provider: provider, Model: routeModel, Success: false, Error: rerr}
@@ -156,8 +156,8 @@ func (m *Manager) executeStreamWithModelPool(ctx context.Context, executor Provi
 				lastErr = bootstrapErr
 				continue
 			}
-			errCh := make(chan cliproxyexecutor.StreamChunk, 1)
-			errCh <- cliproxyexecutor.StreamChunk{Err: bootstrapErr}
+			errCh := make(chan cockpitexecutor.StreamChunk, 1)
+			errCh <- cockpitexecutor.StreamChunk{Err: bootstrapErr}
 			close(errCh)
 			return m.wrapStreamResult(ctx, auth.Clone(), provider, routeModel, streamResult.Headers, nil, errCh), nil
 		}
@@ -170,15 +170,15 @@ func (m *Manager) executeStreamWithModelPool(ctx context.Context, executor Provi
 				lastErr = emptyErr
 				continue
 			}
-			errCh := make(chan cliproxyexecutor.StreamChunk, 1)
-			errCh <- cliproxyexecutor.StreamChunk{Err: emptyErr}
+			errCh := make(chan cockpitexecutor.StreamChunk, 1)
+			errCh <- cockpitexecutor.StreamChunk{Err: emptyErr}
 			close(errCh)
 			return m.wrapStreamResult(ctx, auth.Clone(), provider, routeModel, streamResult.Headers, nil, errCh), nil
 		}
 
 		remaining := streamResult.Chunks
 		if closed {
-			closedCh := make(chan cliproxyexecutor.StreamChunk)
+			closedCh := make(chan cockpitexecutor.StreamChunk)
 			close(closedCh)
 			remaining = closedCh
 		}
@@ -190,10 +190,10 @@ func (m *Manager) executeStreamWithModelPool(ctx context.Context, executor Provi
 	return nil, lastErr
 }
 
-func (m *Manager) Execute(ctx context.Context, providers []string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
+func (m *Manager) Execute(ctx context.Context, providers []string, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
 	normalized := m.normalizeProviders(providers)
 	if len(normalized) == 0 {
-		return cliproxyexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
+		return cockpitexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
 	}
 
 	_, maxRetryCredentials, maxWait := m.retrySettings()
@@ -210,19 +210,19 @@ func (m *Manager) Execute(ctx context.Context, providers []string, req cliproxye
 			break
 		}
 		if errWait := waitForCooldown(ctx, wait); errWait != nil {
-			return cliproxyexecutor.Response{}, errWait
+			return cockpitexecutor.Response{}, errWait
 		}
 	}
 	if lastErr != nil {
-		return cliproxyexecutor.Response{}, lastErr
+		return cockpitexecutor.Response{}, lastErr
 	}
-	return cliproxyexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
+	return cockpitexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
 }
 
-func (m *Manager) ExecuteCount(ctx context.Context, providers []string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
+func (m *Manager) ExecuteCount(ctx context.Context, providers []string, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
 	normalized := m.normalizeProviders(providers)
 	if len(normalized) == 0 {
-		return cliproxyexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
+		return cockpitexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
 	}
 
 	_, maxRetryCredentials, maxWait := m.retrySettings()
@@ -239,16 +239,16 @@ func (m *Manager) ExecuteCount(ctx context.Context, providers []string, req clip
 			break
 		}
 		if errWait := waitForCooldown(ctx, wait); errWait != nil {
-			return cliproxyexecutor.Response{}, errWait
+			return cockpitexecutor.Response{}, errWait
 		}
 	}
 	if lastErr != nil {
-		return cliproxyexecutor.Response{}, lastErr
+		return cockpitexecutor.Response{}, lastErr
 	}
-	return cliproxyexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
+	return cockpitexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
 }
 
-func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
+func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cockpitexecutor.Request, opts cockpitexecutor.Options) (*cockpitexecutor.StreamResult, error) {
 	normalized := m.normalizeProviders(providers)
 	if len(normalized) == 0 {
 		return nil, &Error{Code: "provider_not_found", Message: "no provider supplied"}
@@ -277,9 +277,9 @@ func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cli
 	return nil, &Error{Code: "auth_not_found", Message: "no auth available"}
 }
 
-func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, maxRetryCredentials int) (cliproxyexecutor.Response, error) {
+func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req cockpitexecutor.Request, opts cockpitexecutor.Options, maxRetryCredentials int) (cockpitexecutor.Response, error) {
 	if len(providers) == 0 {
-		return cliproxyexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
+		return cockpitexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
 	}
 	routeModel := req.Model
 	opts = ensureRequestedModelMetadata(opts, routeModel)
@@ -288,16 +288,16 @@ func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req 
 	for {
 		if maxRetryCredentials > 0 && len(tried) >= maxRetryCredentials {
 			if lastErr != nil {
-				return cliproxyexecutor.Response{}, lastErr
+				return cockpitexecutor.Response{}, lastErr
 			}
-			return cliproxyexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
+			return cockpitexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
 		}
 		auth, executor, provider, errPick := m.pickNextMixed(ctx, providers, routeModel, opts, tried)
 		if errPick != nil {
 			if lastErr != nil {
-				return cliproxyexecutor.Response{}, lastErr
+				return cockpitexecutor.Response{}, lastErr
 			}
-			return cliproxyexecutor.Response{}, errPick
+			return cockpitexecutor.Response{}, errPick
 		}
 
 		entry := logEntryWithRequestID(ctx)
@@ -308,7 +308,7 @@ func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req 
 		execCtx := ctx
 		if rt := m.roundTripperFor(auth); rt != nil {
 			execCtx = context.WithValue(execCtx, roundTripperContextKey{}, rt)
-			execCtx = context.WithValue(execCtx, "cliproxy.roundtripper", rt)
+			execCtx = context.WithValue(execCtx, "cockpit.roundtripper", rt)
 		}
 
 		models := m.prepareExecutionModels(auth, routeModel)
@@ -320,10 +320,10 @@ func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req 
 			result := Result{AuthID: auth.ID, Provider: provider, Model: routeModel, Success: errExec == nil}
 			if errExec != nil {
 				if errCtx := execCtx.Err(); errCtx != nil {
-					return cliproxyexecutor.Response{}, errCtx
+					return cockpitexecutor.Response{}, errCtx
 				}
 				result.Error = &Error{Message: errExec.Error()}
-				if se, ok := errors.AsType[cliproxyexecutor.StatusError](errExec); ok && se != nil {
+				if se, ok := errors.AsType[cockpitexecutor.StatusError](errExec); ok && se != nil {
 					result.Error.HTTPStatus = se.StatusCode()
 				}
 				if ra := retryAfterFromError(errExec); ra != nil {
@@ -331,7 +331,7 @@ func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req 
 				}
 				m.MarkResult(execCtx, result)
 				if isRequestInvalidError(errExec) {
-					return cliproxyexecutor.Response{}, errExec
+					return cockpitexecutor.Response{}, errExec
 				}
 				authErr = errExec
 				continue
@@ -341,7 +341,7 @@ func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req 
 		}
 		if authErr != nil {
 			if isRequestInvalidError(authErr) {
-				return cliproxyexecutor.Response{}, authErr
+				return cockpitexecutor.Response{}, authErr
 			}
 			lastErr = authErr
 			continue
@@ -349,9 +349,9 @@ func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req 
 	}
 }
 
-func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, maxRetryCredentials int) (cliproxyexecutor.Response, error) {
+func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string, req cockpitexecutor.Request, opts cockpitexecutor.Options, maxRetryCredentials int) (cockpitexecutor.Response, error) {
 	if len(providers) == 0 {
-		return cliproxyexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
+		return cockpitexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
 	}
 	routeModel := req.Model
 	opts = ensureRequestedModelMetadata(opts, routeModel)
@@ -360,16 +360,16 @@ func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string,
 	for {
 		if maxRetryCredentials > 0 && len(tried) >= maxRetryCredentials {
 			if lastErr != nil {
-				return cliproxyexecutor.Response{}, lastErr
+				return cockpitexecutor.Response{}, lastErr
 			}
-			return cliproxyexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
+			return cockpitexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
 		}
 		auth, executor, provider, errPick := m.pickNextMixed(ctx, providers, routeModel, opts, tried)
 		if errPick != nil {
 			if lastErr != nil {
-				return cliproxyexecutor.Response{}, lastErr
+				return cockpitexecutor.Response{}, lastErr
 			}
-			return cliproxyexecutor.Response{}, errPick
+			return cockpitexecutor.Response{}, errPick
 		}
 
 		entry := logEntryWithRequestID(ctx)
@@ -380,7 +380,7 @@ func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string,
 		execCtx := ctx
 		if rt := m.roundTripperFor(auth); rt != nil {
 			execCtx = context.WithValue(execCtx, roundTripperContextKey{}, rt)
-			execCtx = context.WithValue(execCtx, "cliproxy.roundtripper", rt)
+			execCtx = context.WithValue(execCtx, "cockpit.roundtripper", rt)
 		}
 
 		models := m.prepareExecutionModels(auth, routeModel)
@@ -392,10 +392,10 @@ func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string,
 			result := Result{AuthID: auth.ID, Provider: provider, Model: routeModel, Success: errExec == nil}
 			if errExec != nil {
 				if errCtx := execCtx.Err(); errCtx != nil {
-					return cliproxyexecutor.Response{}, errCtx
+					return cockpitexecutor.Response{}, errCtx
 				}
 				result.Error = &Error{Message: errExec.Error()}
-				if se, ok := errors.AsType[cliproxyexecutor.StatusError](errExec); ok && se != nil {
+				if se, ok := errors.AsType[cockpitexecutor.StatusError](errExec); ok && se != nil {
 					result.Error.HTTPStatus = se.StatusCode()
 				}
 				if ra := retryAfterFromError(errExec); ra != nil {
@@ -403,7 +403,7 @@ func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string,
 				}
 				m.hook.OnResult(execCtx, result)
 				if isRequestInvalidError(errExec) {
-					return cliproxyexecutor.Response{}, errExec
+					return cockpitexecutor.Response{}, errExec
 				}
 				authErr = errExec
 				continue
@@ -413,7 +413,7 @@ func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string,
 		}
 		if authErr != nil {
 			if isRequestInvalidError(authErr) {
-				return cliproxyexecutor.Response{}, authErr
+				return cockpitexecutor.Response{}, authErr
 			}
 			lastErr = authErr
 			continue
@@ -421,7 +421,7 @@ func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string,
 	}
 }
 
-func (m *Manager) executeStreamMixedOnce(ctx context.Context, providers []string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, maxRetryCredentials int) (*cliproxyexecutor.StreamResult, error) {
+func (m *Manager) executeStreamMixedOnce(ctx context.Context, providers []string, req cockpitexecutor.Request, opts cockpitexecutor.Options, maxRetryCredentials int) (*cockpitexecutor.StreamResult, error) {
 	if len(providers) == 0 {
 		return nil, &Error{Code: "provider_not_found", Message: "no provider supplied"}
 	}
@@ -452,7 +452,7 @@ func (m *Manager) executeStreamMixedOnce(ctx context.Context, providers []string
 		execCtx := ctx
 		if rt := m.roundTripperFor(auth); rt != nil {
 			execCtx = context.WithValue(execCtx, roundTripperContextKey{}, rt)
-			execCtx = context.WithValue(execCtx, "cliproxy.roundtripper", rt)
+			execCtx = context.WithValue(execCtx, "cockpit.roundtripper", rt)
 		}
 		streamResult, errStream := m.executeStreamWithModelPool(execCtx, executor, auth, provider, req, opts, routeModel)
 		if errStream != nil {

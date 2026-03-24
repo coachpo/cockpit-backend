@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	sdktranslator "github.com/coachpo/cockpit-backend/sdk/translator"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -21,7 +21,7 @@ func TestCodexExecutorCacheHelper_OpenAIChatCompletions_StablePromptCacheKeyFrom
 	ctx := context.WithValue(context.Background(), "gin", ginCtx)
 	executor := &CodexExecutor{}
 	rawJSON := []byte(`{"model":"gpt-5.3-codex","stream":true}`)
-	req := cliproxyexecutor.Request{
+	req := cockpitexecutor.Request{
 		Model:   "gpt-5.3-codex",
 		Payload: []byte(`{"model":"gpt-5.3-codex"}`),
 	}

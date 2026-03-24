@@ -4,11 +4,11 @@ import (
 	"reflect"
 	"testing"
 
-	cliproxy "github.com/coachpo/cockpit-backend/sdk/cliproxy"
+	"github.com/coachpo/cockpit-backend/sdk/cockpit"
 )
 
 func TestBuilderDoesNotExposeLocalManagementPasswordOption(t *testing.T) {
-	if _, ok := reflect.TypeFor[*cliproxy.Builder]().MethodByName("WithLocalManagementPassword"); ok {
+	if _, ok := reflect.TypeFor[*cockpit.Builder]().MethodByName("WithLocalManagementPassword"); ok {
 		t.Fatalf("expected Builder not to expose WithLocalManagementPassword")
 	}
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	"gopkg.in/yaml.v3"
 
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 type Watcher struct {

@@ -1,4 +1,4 @@
-package cliproxy
+package cockpit
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/runtime/executor"
 	"github.com/coachpo/cockpit-backend/internal/watcher"
 	"github.com/coachpo/cockpit-backend/internal/wsrelay"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	log "github.com/sirupsen/logrus"
 )
 

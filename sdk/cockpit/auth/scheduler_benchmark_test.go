@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/coachpo/cockpit-backend/internal/registry"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 )
 
 type schedulerBenchmarkExecutor struct {
@@ -16,11 +16,11 @@ type schedulerBenchmarkExecutor struct {
 
 func (e schedulerBenchmarkExecutor) Identifier() string { return e.id }
 
-func (e schedulerBenchmarkExecutor) Execute(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (e schedulerBenchmarkExecutor) Execute(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
-func (e schedulerBenchmarkExecutor) ExecuteStream(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
+func (e schedulerBenchmarkExecutor) ExecuteStream(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (*cockpitexecutor.StreamResult, error) {
 	return nil, nil
 }
 
@@ -28,8 +28,8 @@ func (e schedulerBenchmarkExecutor) Refresh(ctx context.Context, auth *Auth) (*A
 	return auth, nil
 }
 
-func (e schedulerBenchmarkExecutor) CountTokens(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (e schedulerBenchmarkExecutor) CountTokens(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
 func (e schedulerBenchmarkExecutor) HttpRequest(ctx context.Context, auth *Auth, req *http.Request) (*http.Response, error) {
@@ -84,7 +84,7 @@ func benchmarkManagerSetup(b *testing.B, total int, mixed bool, withPriority boo
 func BenchmarkManagerPickNext500(b *testing.B) {
 	manager, _, model := benchmarkManagerSetup(b, 500, false, false)
 	ctx := context.Background()
-	opts := cliproxyexecutor.Options{}
+	opts := cockpitexecutor.Options{}
 	tried := map[string]struct{}{}
 	if _, _, errWarm := manager.pickNext(ctx, "gemini", model, opts, tried); errWarm != nil {
 		b.Fatalf("warmup pickNext error = %v", errWarm)
@@ -103,7 +103,7 @@ func BenchmarkManagerPickNext500(b *testing.B) {
 func BenchmarkManagerPickNext1000(b *testing.B) {
 	manager, _, model := benchmarkManagerSetup(b, 1000, false, false)
 	ctx := context.Background()
-	opts := cliproxyexecutor.Options{}
+	opts := cockpitexecutor.Options{}
 	tried := map[string]struct{}{}
 	if _, _, errWarm := manager.pickNext(ctx, "gemini", model, opts, tried); errWarm != nil {
 		b.Fatalf("warmup pickNext error = %v", errWarm)
@@ -122,7 +122,7 @@ func BenchmarkManagerPickNext1000(b *testing.B) {
 func BenchmarkManagerPickNextPriority500(b *testing.B) {
 	manager, _, model := benchmarkManagerSetup(b, 500, false, true)
 	ctx := context.Background()
-	opts := cliproxyexecutor.Options{}
+	opts := cockpitexecutor.Options{}
 	tried := map[string]struct{}{}
 	if _, _, errWarm := manager.pickNext(ctx, "gemini", model, opts, tried); errWarm != nil {
 		b.Fatalf("warmup pickNext error = %v", errWarm)
@@ -141,7 +141,7 @@ func BenchmarkManagerPickNextPriority500(b *testing.B) {
 func BenchmarkManagerPickNextPriority1000(b *testing.B) {
 	manager, _, model := benchmarkManagerSetup(b, 1000, false, true)
 	ctx := context.Background()
-	opts := cliproxyexecutor.Options{}
+	opts := cockpitexecutor.Options{}
 	tried := map[string]struct{}{}
 	if _, _, errWarm := manager.pickNext(ctx, "gemini", model, opts, tried); errWarm != nil {
 		b.Fatalf("warmup pickNext error = %v", errWarm)
@@ -160,7 +160,7 @@ func BenchmarkManagerPickNextPriority1000(b *testing.B) {
 func BenchmarkManagerPickNextMixed500(b *testing.B) {
 	manager, providers, model := benchmarkManagerSetup(b, 500, true, false)
 	ctx := context.Background()
-	opts := cliproxyexecutor.Options{}
+	opts := cockpitexecutor.Options{}
 	tried := map[string]struct{}{}
 	if _, _, _, errWarm := manager.pickNextMixed(ctx, providers, model, opts, tried); errWarm != nil {
 		b.Fatalf("warmup pickNextMixed error = %v", errWarm)
@@ -179,7 +179,7 @@ func BenchmarkManagerPickNextMixed500(b *testing.B) {
 func BenchmarkManagerPickNextMixedPriority500(b *testing.B) {
 	manager, providers, model := benchmarkManagerSetup(b, 500, true, true)
 	ctx := context.Background()
-	opts := cliproxyexecutor.Options{}
+	opts := cockpitexecutor.Options{}
 	tried := map[string]struct{}{}
 	if _, _, _, errWarm := manager.pickNextMixed(ctx, providers, model, opts, tried); errWarm != nil {
 		b.Fatalf("warmup pickNextMixed error = %v", errWarm)
@@ -198,7 +198,7 @@ func BenchmarkManagerPickNextMixedPriority500(b *testing.B) {
 func BenchmarkManagerPickNextAndMarkResult1000(b *testing.B) {
 	manager, _, model := benchmarkManagerSetup(b, 1000, false, false)
 	ctx := context.Background()
-	opts := cliproxyexecutor.Options{}
+	opts := cockpitexecutor.Options{}
 	tried := map[string]struct{}{}
 	if _, _, errWarm := manager.pickNext(ctx, "gemini", model, opts, tried); errWarm != nil {
 		b.Fatalf("warmup pickNext error = %v", errWarm)

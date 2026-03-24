@@ -5,7 +5,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/interfaces"
 	"github.com/coachpo/cockpit-backend/internal/logging"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/net/context"
 )

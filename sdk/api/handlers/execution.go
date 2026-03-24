@@ -8,7 +8,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/interfaces"
 	"github.com/coachpo/cockpit-backend/internal/thinking"
 	"github.com/coachpo/cockpit-backend/internal/util"
-	coreexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	coreexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	sdktranslator "github.com/coachpo/cockpit-backend/sdk/translator"
 	"golang.org/x/net/context"
 )

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 )

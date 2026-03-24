@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 // Manager aggregates authenticators and coordinates persistence via a token store.

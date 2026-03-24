@@ -9,16 +9,16 @@ import (
 	"time"
 
 	internalconfig "github.com/coachpo/cockpit-backend/internal/config"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	"github.com/google/uuid"
 )
 
 type ProviderExecutor interface {
 	Identifier() string
-	Execute(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error)
-	ExecuteStream(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error)
+	Execute(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error)
+	ExecuteStream(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (*cockpitexecutor.StreamResult, error)
 	Refresh(ctx context.Context, auth *Auth) (*Auth, error)
-	CountTokens(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error)
+	CountTokens(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error)
 	HttpRequest(ctx context.Context, auth *Auth, req *http.Request) (*http.Response, error)
 }
 
@@ -66,7 +66,7 @@ type Result struct {
 }
 
 type Selector interface {
-	Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth) (*Auth, error)
+	Pick(ctx context.Context, provider, model string, opts cockpitexecutor.Options, auths []*Auth) (*Auth, error)
 }
 
 type Hook interface {

@@ -12,8 +12,8 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/misc"
 	"github.com/coachpo/cockpit-backend/internal/util"
-	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	sdktranslator "github.com/coachpo/cockpit-backend/sdk/translator"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
@@ -146,7 +146,7 @@ func countCodexInputTokens(enc tokenizer.Codec, body []byte) (int64, error) {
 	return int64(count), nil
 }
 
-func (e *CodexExecutor) Refresh(ctx context.Context, auth *cliproxyauth.Auth) (*cliproxyauth.Auth, error) {
+func (e *CodexExecutor) Refresh(ctx context.Context, auth *cockpitauth.Auth) (*cockpitauth.Auth, error) {
 	log.Debugf("codex executor: refresh called")
 	if auth == nil {
 		return nil, statusErr{code: 500, msg: "codex executor: auth is nil"}
@@ -185,7 +185,7 @@ func (e *CodexExecutor) Refresh(ctx context.Context, auth *cliproxyauth.Auth) (*
 	return auth, nil
 }
 
-func (e *CodexExecutor) cacheHelper(ctx context.Context, from sdktranslator.Format, url string, req cliproxyexecutor.Request, rawJSON []byte) (*http.Request, error) {
+func (e *CodexExecutor) cacheHelper(ctx context.Context, from sdktranslator.Format, url string, req cockpitexecutor.Request, rawJSON []byte) (*http.Request, error) {
 	var cache codexCache
 	if from == "openai-response" {
 		promptCacheKey := gjson.GetBytes(req.Payload, "prompt_cache_key")
@@ -212,7 +212,7 @@ func (e *CodexExecutor) cacheHelper(ctx context.Context, from sdktranslator.Form
 	return httpReq, nil
 }
 
-func applyCodexHeaders(r *http.Request, auth *cliproxyauth.Auth, token string, stream bool, cfg *config.Config) {
+func applyCodexHeaders(r *http.Request, auth *cockpitauth.Auth, token string, stream bool, cfg *config.Config) {
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Authorization", "Bearer "+token)
 
@@ -263,7 +263,7 @@ func newCodexStatusErr(statusCode int, body []byte, headers http.Header) statusE
 	return err
 }
 
-func codexCreds(a *cliproxyauth.Auth) (apiKey, baseURL string) {
+func codexCreds(a *cockpitauth.Auth) (apiKey, baseURL string) {
 	if a == nil {
 		return "", ""
 	}
@@ -279,7 +279,7 @@ func codexCreds(a *cliproxyauth.Auth) (apiKey, baseURL string) {
 	return
 }
 
-func (e *CodexExecutor) resolveCodexConfig(auth *cliproxyauth.Auth) *config.CodexKey {
+func (e *CodexExecutor) resolveCodexConfig(auth *cockpitauth.Auth) *config.CodexKey {
 	if auth == nil || e.cfg == nil {
 		return nil
 	}

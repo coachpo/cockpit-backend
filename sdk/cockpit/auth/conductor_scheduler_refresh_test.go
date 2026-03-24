@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/coachpo/cockpit-backend/internal/registry"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 )
 
 type schedulerProviderTestExecutor struct {
@@ -16,11 +16,11 @@ type schedulerProviderTestExecutor struct {
 
 func (e schedulerProviderTestExecutor) Identifier() string { return e.provider }
 
-func (e schedulerProviderTestExecutor) Execute(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (e schedulerProviderTestExecutor) Execute(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
-func (e schedulerProviderTestExecutor) ExecuteStream(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
+func (e schedulerProviderTestExecutor) ExecuteStream(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (*cockpitexecutor.StreamResult, error) {
 	return nil, nil
 }
 
@@ -28,8 +28,8 @@ func (e schedulerProviderTestExecutor) Refresh(ctx context.Context, auth *Auth) 
 	return auth, nil
 }
 
-func (e schedulerProviderTestExecutor) CountTokens(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (e schedulerProviderTestExecutor) CountTokens(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
 func (e schedulerProviderTestExecutor) HttpRequest(ctx context.Context, auth *Auth, req *http.Request) (*http.Response, error) {
@@ -79,7 +79,7 @@ func TestManager_RefreshSchedulerEntry_RebuildsSupportedModelSetAfterModelRegist
 
 			registerSchedulerModels(t, "gemini", "scheduler-refresh-model", auth.ID)
 
-			got, errPick := manager.scheduler.pickSingle(ctx, "gemini", "scheduler-refresh-model", cliproxyexecutor.Options{}, nil)
+			got, errPick := manager.scheduler.pickSingle(ctx, "gemini", "scheduler-refresh-model", cockpitexecutor.Options{}, nil)
 			var authErr *Error
 			if !errors.As(errPick, &authErr) || authErr == nil {
 				t.Fatalf("pickSingle() before refresh error = %v, want auth_not_found", errPick)
@@ -93,7 +93,7 @@ func TestManager_RefreshSchedulerEntry_RebuildsSupportedModelSetAfterModelRegist
 
 			manager.RefreshSchedulerEntry(auth.ID)
 
-			got, errPick = manager.scheduler.pickSingle(ctx, "gemini", "scheduler-refresh-model", cliproxyexecutor.Options{}, nil)
+			got, errPick = manager.scheduler.pickSingle(ctx, "gemini", "scheduler-refresh-model", cockpitexecutor.Options{}, nil)
 			if errPick != nil {
 				t.Fatalf("pickSingle() after refresh error = %v", errPick)
 			}
@@ -141,7 +141,7 @@ func TestManager_PickNext_RebuildsSchedulerAfterModelCooldownError(t *testing.T)
 		reg.UnregisterClient(newAuth.ID)
 	})
 
-	got, errPick := manager.scheduler.pickSingle(ctx, "gemini", "scheduler-cooldown-rebuild-model", cliproxyexecutor.Options{}, nil)
+	got, errPick := manager.scheduler.pickSingle(ctx, "gemini", "scheduler-cooldown-rebuild-model", cockpitexecutor.Options{}, nil)
 	var cooldownErr *modelCooldownError
 	if !errors.As(errPick, &cooldownErr) {
 		t.Fatalf("pickSingle() before sync error = %v, want modelCooldownError", errPick)
@@ -150,7 +150,7 @@ func TestManager_PickNext_RebuildsSchedulerAfterModelCooldownError(t *testing.T)
 		t.Fatalf("pickSingle() before sync auth = %v, want nil", got)
 	}
 
-	got, executor, errPick := manager.pickNext(ctx, "gemini", "scheduler-cooldown-rebuild-model", cliproxyexecutor.Options{}, nil)
+	got, executor, errPick := manager.pickNext(ctx, "gemini", "scheduler-cooldown-rebuild-model", cockpitexecutor.Options{}, nil)
 	if errPick != nil {
 		t.Fatalf("pickNext() error = %v", errPick)
 	}

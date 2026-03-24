@@ -8,7 +8,7 @@ import (
 	internalmanagement "github.com/coachpo/cockpit-backend/internal/api/handlers/management"
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"github.com/gin-gonic/gin"
 )
 

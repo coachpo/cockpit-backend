@@ -4,7 +4,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/util"
 	"github.com/coachpo/cockpit-backend/internal/watcher/diff"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"gopkg.in/yaml.v3"
 
 	log "github.com/sirupsen/logrus"

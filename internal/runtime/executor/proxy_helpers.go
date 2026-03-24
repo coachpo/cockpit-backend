@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	cockpitauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"github.com/coachpo/cockpit-backend/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
 )
 
-func newProxyAwareHTTPClient(ctx context.Context, auth *cliproxyauth.Auth, timeout time.Duration) *http.Client {
+func newProxyAwareHTTPClient(ctx context.Context, auth *cockpitauth.Auth, timeout time.Duration) *http.Client {
 	httpClient := &http.Client{}
 	if timeout > 0 {
 		httpClient.Timeout = timeout
@@ -32,7 +32,7 @@ func newProxyAwareHTTPClient(ctx context.Context, auth *cliproxyauth.Auth, timeo
 	}
 
 	// Reuse any caller-provided round tripper when no auth-specific proxy is active.
-	if rt, ok := ctx.Value("cliproxy.roundtripper").(http.RoundTripper); ok && rt != nil {
+	if rt, ok := ctx.Value("cockpit.roundtripper").(http.RoundTripper); ok && rt != nil {
 		httpClient.Transport = rt
 	}
 

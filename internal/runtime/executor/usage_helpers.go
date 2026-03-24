@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	cockpitauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
@@ -29,7 +29,7 @@ type usageReporter struct {
 	requestedAt time.Time
 }
 
-func newUsageReporter(ctx context.Context, provider, model string, auth *cliproxyauth.Auth) *usageReporter {
+func newUsageReporter(ctx context.Context, provider, model string, auth *cockpitauth.Auth) *usageReporter {
 	apiKey := apiKeyFromContext(ctx)
 	reporter := &usageReporter{
 		provider:    provider,
@@ -74,7 +74,7 @@ func apiKeyFromContext(ctx context.Context) string {
 	return ""
 }
 
-func resolveUsageSource(auth *cliproxyauth.Auth, ctxAPIKey string) string {
+func resolveUsageSource(auth *cockpitauth.Auth, ctxAPIKey string) string {
 	if auth != nil {
 		if _, value := auth.AccountInfo(); value != "" {
 			return strings.TrimSpace(value)

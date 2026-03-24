@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
-	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	cockpitauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
@@ -52,7 +52,7 @@ func TestApplyCodexWebsocketHeadersUsesConfigDefaultsForOAuth(t *testing.T) {
 			BetaFeatures: "feature-a,feature-b",
 		},
 	}
-	auth := &cliproxyauth.Auth{
+	auth := &cockpitauth.Auth{
 		Provider: "codex",
 		Metadata: map[string]any{"email": "user@example.com"},
 	}
@@ -77,7 +77,7 @@ func TestApplyCodexWebsocketHeadersPrefersExistingHeadersOverClientAndConfig(t *
 			BetaFeatures: "config-beta",
 		},
 	}
-	auth := &cliproxyauth.Auth{
+	auth := &cockpitauth.Auth{
 		Provider: "codex",
 		Metadata: map[string]any{"email": "user@example.com"},
 	}
@@ -106,7 +106,7 @@ func TestApplyCodexWebsocketHeadersConfigUserAgentOverridesClientHeader(t *testi
 			BetaFeatures: "config-beta",
 		},
 	}
-	auth := &cliproxyauth.Auth{
+	auth := &cockpitauth.Auth{
 		Provider: "codex",
 		Metadata: map[string]any{"email": "user@example.com"},
 	}
@@ -132,7 +132,7 @@ func TestApplyCodexWebsocketHeadersIgnoresConfigForAPIKeyAuth(t *testing.T) {
 			BetaFeatures: "config-beta",
 		},
 	}
-	auth := &cliproxyauth.Auth{
+	auth := &cockpitauth.Auth{
 		Provider:   "codex",
 		Attributes: map[string]string{"api_key": "sk-test"},
 	}
@@ -158,7 +158,7 @@ func TestApplyCodexHeadersUsesConfigUserAgentForOAuth(t *testing.T) {
 			BetaFeatures: "config-beta",
 		},
 	}
-	auth := &cliproxyauth.Auth{
+	auth := &cockpitauth.Auth{
 		Provider: "codex",
 		Metadata: map[string]any{"email": "user@example.com"},
 	}
@@ -192,7 +192,7 @@ func TestNewProxyAwareWebsocketDialerDirectDisablesProxy(t *testing.T) {
 	t.Parallel()
 
 	dialer := newProxyAwareWebsocketDialer(
-		&cliproxyauth.Auth{ProxyURL: "direct"},
+		&cockpitauth.Auth{ProxyURL: "direct"},
 	)
 
 	if dialer.Proxy != nil {

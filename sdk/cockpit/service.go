@@ -1,6 +1,6 @@
-// Package cliproxy provides the core service implementation for Cockpit.
+// Package cockpit provides the core service implementation for Cockpit.
 // and integration with various AI service providers through a unified interface.
-package cliproxy
+package cockpit
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/wsrelay"
 	sdkaccess "github.com/coachpo/cockpit-backend/sdk/access"
 	sdkAuth "github.com/coachpo/cockpit-backend/sdk/auth"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	log "github.com/sirupsen/logrus"
 )
 

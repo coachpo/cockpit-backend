@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,11 +22,11 @@ type apiCallTestExecutor struct {
 
 func (e apiCallTestExecutor) Identifier() string { return "codex" }
 
-func (e apiCallTestExecutor) Execute(context.Context, *coreauth.Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (e apiCallTestExecutor) Execute(context.Context, *coreauth.Auth, cockpitexecutor.Request, cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
-func (e apiCallTestExecutor) ExecuteStream(context.Context, *coreauth.Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
+func (e apiCallTestExecutor) ExecuteStream(context.Context, *coreauth.Auth, cockpitexecutor.Request, cockpitexecutor.Options) (*cockpitexecutor.StreamResult, error) {
 	return nil, nil
 }
 
@@ -34,8 +34,8 @@ func (e apiCallTestExecutor) Refresh(context.Context, *coreauth.Auth) (*coreauth
 	return nil, nil
 }
 
-func (e apiCallTestExecutor) CountTokens(context.Context, *coreauth.Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (e apiCallTestExecutor) CountTokens(context.Context, *coreauth.Auth, cockpitexecutor.Request, cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
 func (e apiCallTestExecutor) PrepareRequest(req *http.Request, auth *coreauth.Auth) error {

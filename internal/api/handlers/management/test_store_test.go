@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/coachpo/cockpit-backend/internal/nacos"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 var errStoreUnavailable = errors.New("store unavailable")

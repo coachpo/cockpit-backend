@@ -9,7 +9,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/registry"
 	"github.com/coachpo/cockpit-backend/internal/thinking"
 	"github.com/coachpo/cockpit-backend/internal/util"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 func websocketUpstreamSupportsIncrementalInput(attributes map[string]string, metadata map[string]any) bool {

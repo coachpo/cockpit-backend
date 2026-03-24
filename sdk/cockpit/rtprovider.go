@@ -1,11 +1,11 @@
-package cliproxy
+package cockpit
 
 import (
 	"net/http"
 	"strings"
 	"sync"
 
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"github.com/coachpo/cockpit-backend/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
 )

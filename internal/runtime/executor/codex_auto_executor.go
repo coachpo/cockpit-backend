@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
-	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 )
 
 // CodexAutoExecutor routes Codex requests to the websocket transport only when:
@@ -31,50 +31,50 @@ func NewCodexAutoExecutor(cfg *config.Config) *CodexAutoExecutor {
 
 func (e *CodexAutoExecutor) Identifier() string { return "codex" }
 
-func (e *CodexAutoExecutor) PrepareRequest(req *http.Request, auth *cliproxyauth.Auth) error {
+func (e *CodexAutoExecutor) PrepareRequest(req *http.Request, auth *cockpitauth.Auth) error {
 	if e == nil || e.httpExec == nil {
 		return nil
 	}
 	return e.httpExec.PrepareRequest(req, auth)
 }
 
-func (e *CodexAutoExecutor) HttpRequest(ctx context.Context, auth *cliproxyauth.Auth, req *http.Request) (*http.Response, error) {
+func (e *CodexAutoExecutor) HttpRequest(ctx context.Context, auth *cockpitauth.Auth, req *http.Request) (*http.Response, error) {
 	if e == nil || e.httpExec == nil {
 		return nil, fmt.Errorf("codex auto executor: http executor is nil")
 	}
 	return e.httpExec.HttpRequest(ctx, auth, req)
 }
 
-func (e *CodexAutoExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
+func (e *CodexAutoExecutor) Execute(ctx context.Context, auth *cockpitauth.Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
 	if e == nil || e.httpExec == nil || e.wsExec == nil {
-		return cliproxyexecutor.Response{}, fmt.Errorf("codex auto executor: executor is nil")
+		return cockpitexecutor.Response{}, fmt.Errorf("codex auto executor: executor is nil")
 	}
-	if cliproxyexecutor.DownstreamWebsocket(ctx) && codexWebsocketsEnabled(auth) {
+	if cockpitexecutor.DownstreamWebsocket(ctx) && codexWebsocketsEnabled(auth) {
 		return e.wsExec.Execute(ctx, auth, req, opts)
 	}
 	return e.httpExec.Execute(ctx, auth, req, opts)
 }
 
-func (e *CodexAutoExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
+func (e *CodexAutoExecutor) ExecuteStream(ctx context.Context, auth *cockpitauth.Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (*cockpitexecutor.StreamResult, error) {
 	if e == nil || e.httpExec == nil || e.wsExec == nil {
 		return nil, fmt.Errorf("codex auto executor: executor is nil")
 	}
-	if cliproxyexecutor.DownstreamWebsocket(ctx) && codexWebsocketsEnabled(auth) {
+	if cockpitexecutor.DownstreamWebsocket(ctx) && codexWebsocketsEnabled(auth) {
 		return e.wsExec.ExecuteStream(ctx, auth, req, opts)
 	}
 	return e.httpExec.ExecuteStream(ctx, auth, req, opts)
 }
 
-func (e *CodexAutoExecutor) Refresh(ctx context.Context, auth *cliproxyauth.Auth) (*cliproxyauth.Auth, error) {
+func (e *CodexAutoExecutor) Refresh(ctx context.Context, auth *cockpitauth.Auth) (*cockpitauth.Auth, error) {
 	if e == nil || e.httpExec == nil {
 		return nil, fmt.Errorf("codex auto executor: http executor is nil")
 	}
 	return e.httpExec.Refresh(ctx, auth)
 }
 
-func (e *CodexAutoExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
+func (e *CodexAutoExecutor) CountTokens(ctx context.Context, auth *cockpitauth.Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
 	if e == nil || e.httpExec == nil {
-		return cliproxyexecutor.Response{}, fmt.Errorf("codex auto executor: http executor is nil")
+		return cockpitexecutor.Response{}, fmt.Errorf("codex auto executor: http executor is nil")
 	}
 	return e.httpExec.CountTokens(ctx, auth, req, opts)
 }
@@ -86,7 +86,7 @@ func (e *CodexAutoExecutor) CloseExecutionSession(sessionID string) {
 	e.wsExec.CloseExecutionSession(sessionID)
 }
 
-func codexWebsocketsEnabled(auth *cliproxyauth.Auth) bool {
+func codexWebsocketsEnabled(auth *cockpitauth.Auth) bool {
 	if auth == nil {
 		return false
 	}

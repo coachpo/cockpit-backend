@@ -12,7 +12,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/misc"
 	"github.com/coachpo/cockpit-backend/internal/util"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	log "github.com/sirupsen/logrus"
 )
 

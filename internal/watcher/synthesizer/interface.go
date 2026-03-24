@@ -2,7 +2,7 @@
 package synthesizer
 
 import (
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 // AuthSynthesizer defines the interface for generating Auth entries from various sources.

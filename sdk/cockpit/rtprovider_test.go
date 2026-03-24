@@ -1,10 +1,10 @@
-package cliproxy
+package cockpit
 
 import (
 	"net/http"
 	"testing"
 
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 func TestRoundTripperForDirectBypassesProxy(t *testing.T) {

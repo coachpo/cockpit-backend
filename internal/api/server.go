@@ -19,7 +19,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	sdkaccess "github.com/coachpo/cockpit-backend/sdk/access"
 	"github.com/coachpo/cockpit-backend/sdk/api/handlers"
-	"github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	"github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

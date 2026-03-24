@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 )
 
 type replaceAwareExecutor struct {
@@ -20,22 +20,22 @@ func (e *replaceAwareExecutor) Identifier() string {
 	return e.id
 }
 
-func (e *replaceAwareExecutor) Execute(context.Context, *Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (e *replaceAwareExecutor) Execute(context.Context, *Auth, cockpitexecutor.Request, cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
-func (e *replaceAwareExecutor) ExecuteStream(context.Context, *Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
-	ch := make(chan cliproxyexecutor.StreamChunk)
+func (e *replaceAwareExecutor) ExecuteStream(context.Context, *Auth, cockpitexecutor.Request, cockpitexecutor.Options) (*cockpitexecutor.StreamResult, error) {
+	ch := make(chan cockpitexecutor.StreamChunk)
 	close(ch)
-	return &cliproxyexecutor.StreamResult{Chunks: ch}, nil
+	return &cockpitexecutor.StreamResult{Chunks: ch}, nil
 }
 
 func (e *replaceAwareExecutor) Refresh(_ context.Context, auth *Auth) (*Auth, error) {
 	return auth, nil
 }
 
-func (e *replaceAwareExecutor) CountTokens(context.Context, *Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (e *replaceAwareExecutor) CountTokens(context.Context, *Auth, cockpitexecutor.Request, cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
 func (e *replaceAwareExecutor) HttpRequest(context.Context, *Auth, *http.Request) (*http.Response, error) {

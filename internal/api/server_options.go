@@ -5,7 +5,7 @@ import (
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/sdk/api/handlers"
-	"github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	"github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	"github.com/gin-gonic/gin"
 )
 

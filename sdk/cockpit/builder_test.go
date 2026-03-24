@@ -1,4 +1,4 @@
-package cliproxy
+package cockpit
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 type builderTestAuthStore struct{}

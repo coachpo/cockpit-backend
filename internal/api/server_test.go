@@ -10,7 +10,7 @@ import (
 	proxyconfig "github.com/coachpo/cockpit-backend/internal/config"
 	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
 	sdkaccess "github.com/coachpo/cockpit-backend/sdk/access"
-	"github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	"github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	gin "github.com/gin-gonic/gin"
 )
 

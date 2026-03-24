@@ -1,4 +1,4 @@
-package cliproxy
+package cockpit
 
 import "github.com/coachpo/cockpit-backend/internal/registry"
 

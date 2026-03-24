@@ -1,10 +1,10 @@
-package cliproxy
+package cockpit
 
 import (
 	"testing"
 
 	"github.com/coachpo/cockpit-backend/internal/config"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 func TestEnsureExecutorsForAuth_CodexDoesNotReplaceInNormalMode(t *testing.T) {

@@ -3,7 +3,7 @@ package auth
 import (
 	"time"
 
-	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	cockpitauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 func init() {
@@ -11,7 +11,7 @@ func init() {
 }
 
 func registerRefreshLead(provider string, factory func() Authenticator) {
-	cliproxyauth.RegisterRefreshLeadProvider(provider, func() *time.Duration {
+	cockpitauth.RegisterRefreshLeadProvider(provider, func() *time.Duration {
 		if factory == nil {
 			return nil
 		}

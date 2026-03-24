@@ -1,10 +1,10 @@
-package cliproxy
+package cockpit
 
 import (
 	"strings"
 
 	"github.com/coachpo/cockpit-backend/internal/registry"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 func (s *Service) registerModelsForAuth(a *coreauth.Auth) {

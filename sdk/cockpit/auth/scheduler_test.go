@@ -7,18 +7,18 @@ import (
 	"time"
 
 	"github.com/coachpo/cockpit-backend/internal/registry"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 )
 
 type schedulerTestExecutor struct{}
 
 func (schedulerTestExecutor) Identifier() string { return "test" }
 
-func (schedulerTestExecutor) Execute(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (schedulerTestExecutor) Execute(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
-func (schedulerTestExecutor) ExecuteStream(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
+func (schedulerTestExecutor) ExecuteStream(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (*cockpitexecutor.StreamResult, error) {
 	return nil, nil
 }
 
@@ -26,8 +26,8 @@ func (schedulerTestExecutor) Refresh(ctx context.Context, auth *Auth) (*Auth, er
 	return auth, nil
 }
 
-func (schedulerTestExecutor) CountTokens(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	return cliproxyexecutor.Response{}, nil
+func (schedulerTestExecutor) CountTokens(ctx context.Context, auth *Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (cockpitexecutor.Response, error) {
+	return cockpitexecutor.Response{}, nil
 }
 
 func (schedulerTestExecutor) HttpRequest(ctx context.Context, auth *Auth, req *http.Request) (*http.Response, error) {
@@ -39,7 +39,7 @@ type trackingSelector struct {
 	lastAuthID []string
 }
 
-func (s *trackingSelector) Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth) (*Auth, error) {
+func (s *trackingSelector) Pick(ctx context.Context, provider, model string, opts cockpitexecutor.Options, auths []*Auth) (*Auth, error) {
 	s.calls++
 	s.lastAuthID = s.lastAuthID[:0]
 	for _, auth := range auths {
@@ -82,7 +82,7 @@ func TestSchedulerPick_RoundRobinHighestPriority(t *testing.T) {
 
 	want := []string{"high-a", "high-b", "high-a"}
 	for index, wantID := range want {
-		got, errPick := scheduler.pickSingle(context.Background(), "gemini", "", cliproxyexecutor.Options{}, nil)
+		got, errPick := scheduler.pickSingle(context.Background(), "gemini", "", cockpitexecutor.Options{}, nil)
 		if errPick != nil {
 			t.Fatalf("pickSingle() #%d error = %v", index, errPick)
 		}
@@ -106,7 +106,7 @@ func TestSchedulerPick_FillFirstSticksToFirstReady(t *testing.T) {
 	)
 
 	for index := 0; index < 3; index++ {
-		got, errPick := scheduler.pickSingle(context.Background(), "gemini", "", cliproxyexecutor.Options{}, nil)
+		got, errPick := scheduler.pickSingle(context.Background(), "gemini", "", cockpitexecutor.Options{}, nil)
 		if errPick != nil {
 			t.Fatalf("pickSingle() #%d error = %v", index, errPick)
 		}
@@ -139,7 +139,7 @@ func TestSchedulerPick_PromotesExpiredCooldownBeforePick(t *testing.T) {
 		},
 	)
 
-	got, errPick := scheduler.pickSingle(context.Background(), "gemini", model, cliproxyexecutor.Options{}, nil)
+	got, errPick := scheduler.pickSingle(context.Background(), "gemini", model, cockpitexecutor.Options{}, nil)
 	if errPick != nil {
 		t.Fatalf("pickSingle() error = %v", errPick)
 	}
@@ -165,7 +165,7 @@ func TestSchedulerPick_IgnoresLegacyGeminiVirtualParentAttribute(t *testing.T) {
 
 	wantIDs := []string{"cred-a::proj-1", "cred-a::proj-2", "cred-b::proj-1", "cred-b::proj-2"}
 	for index := range wantIDs {
-		got, errPick := scheduler.pickSingle(context.Background(), "gemini-cli", "gemini-2.5-pro", cliproxyexecutor.Options{}, nil)
+		got, errPick := scheduler.pickSingle(context.Background(), "gemini-cli", "gemini-2.5-pro", cockpitexecutor.Options{}, nil)
 		if errPick != nil {
 			t.Fatalf("pickSingle() #%d error = %v", index, errPick)
 		}
@@ -188,10 +188,10 @@ func TestSchedulerPick_CodexWebsocketPrefersWebsocketEnabledSubset(t *testing.T)
 		&Auth{ID: "codex-ws-b", Provider: "codex", Attributes: map[string]string{"websockets": "true"}},
 	)
 
-	ctx := cliproxyexecutor.WithDownstreamWebsocket(context.Background())
+	ctx := cockpitexecutor.WithDownstreamWebsocket(context.Background())
 	want := []string{"codex-ws-a", "codex-ws-b", "codex-ws-a"}
 	for index, wantID := range want {
-		got, errPick := scheduler.pickSingle(ctx, "codex", "", cliproxyexecutor.Options{}, nil)
+		got, errPick := scheduler.pickSingle(ctx, "codex", "", cockpitexecutor.Options{}, nil)
 		if errPick != nil {
 			t.Fatalf("pickSingle() #%d error = %v", index, errPick)
 		}
@@ -217,7 +217,7 @@ func TestSchedulerPick_MixedProvidersUsesProviderRotationOverReadyCandidates(t *
 	wantProviders := []string{"gemini", "claude", "gemini", "claude"}
 	wantIDs := []string{"gemini-a", "claude-a", "gemini-b", "claude-a"}
 	for index := range wantProviders {
-		got, provider, errPick := scheduler.pickMixed(context.Background(), []string{"gemini", "claude"}, "", cliproxyexecutor.Options{}, nil)
+		got, provider, errPick := scheduler.pickMixed(context.Background(), []string{"gemini", "claude"}, "", cockpitexecutor.Options{}, nil)
 		if errPick != nil {
 			t.Fatalf("pickMixed() #%d error = %v", index, errPick)
 		}
@@ -252,7 +252,7 @@ func TestSchedulerPick_MixedProvidersPrefersHighestPriorityTier(t *testing.T) {
 	wantProviders := []string{"provider-high-a", "provider-high-b", "provider-high-a", "provider-high-b"}
 	wantIDs := []string{"high-a", "high-b", "high-a", "high-b"}
 	for index := range wantProviders {
-		got, provider, errPick := scheduler.pickMixed(context.Background(), providers, model, cliproxyexecutor.Options{}, nil)
+		got, provider, errPick := scheduler.pickMixed(context.Background(), providers, model, cockpitexecutor.Options{}, nil)
 		if errPick != nil {
 			t.Fatalf("pickMixed() #%d error = %v", index, errPick)
 		}
@@ -287,7 +287,7 @@ func TestManager_PickNextMixed_UsesProviderRotationBeforeCredentialRotation(t *t
 	wantProviders := []string{"gemini", "claude", "gemini", "claude"}
 	wantIDs := []string{"gemini-a", "claude-a", "gemini-b", "claude-a"}
 	for index := range wantProviders {
-		got, _, provider, errPick := manager.pickNextMixed(context.Background(), []string{"gemini", "claude"}, "", cliproxyexecutor.Options{}, map[string]struct{}{})
+		got, _, provider, errPick := manager.pickNextMixed(context.Background(), []string{"gemini", "claude"}, "", cockpitexecutor.Options{}, map[string]struct{}{})
 		if errPick != nil {
 			t.Fatalf("pickNextMixed() #%d error = %v", index, errPick)
 		}
@@ -312,7 +312,7 @@ func TestManagerCustomSelector_FallsBackToLegacyPath(t *testing.T) {
 	manager.auths["auth-a"] = &Auth{ID: "auth-a", Provider: "gemini"}
 	manager.auths["auth-b"] = &Auth{ID: "auth-b", Provider: "gemini"}
 
-	got, _, errPick := manager.pickNext(context.Background(), "gemini", "", cliproxyexecutor.Options{}, map[string]struct{}{})
+	got, _, errPick := manager.pickNext(context.Background(), "gemini", "", cockpitexecutor.Options{}, map[string]struct{}{})
 	if errPick != nil {
 		t.Fatalf("pickNext() error = %v", errPick)
 	}
@@ -358,7 +358,7 @@ func TestManager_SchedulerTracksRegisterAndUpdate(t *testing.T) {
 		t.Fatalf("Register(auth-a) error = %v", errRegister)
 	}
 
-	got, errPick := manager.scheduler.pickSingle(context.Background(), "gemini", "", cliproxyexecutor.Options{}, nil)
+	got, errPick := manager.scheduler.pickSingle(context.Background(), "gemini", "", cockpitexecutor.Options{}, nil)
 	if errPick != nil {
 		t.Fatalf("scheduler.pickSingle() error = %v", errPick)
 	}
@@ -370,7 +370,7 @@ func TestManager_SchedulerTracksRegisterAndUpdate(t *testing.T) {
 		t.Fatalf("Update(auth-a) error = %v", errUpdate)
 	}
 
-	got, errPick = manager.scheduler.pickSingle(context.Background(), "gemini", "", cliproxyexecutor.Options{}, nil)
+	got, errPick = manager.scheduler.pickSingle(context.Background(), "gemini", "", cockpitexecutor.Options{}, nil)
 	if errPick != nil {
 		t.Fatalf("scheduler.pickSingle() after update error = %v", errPick)
 	}
@@ -398,7 +398,7 @@ func TestManager_PickNextMixed_UsesSchedulerRotation(t *testing.T) {
 	wantProviders := []string{"gemini", "claude", "gemini", "claude"}
 	wantIDs := []string{"gemini-a", "claude-a", "gemini-b", "claude-a"}
 	for index := range wantProviders {
-		got, _, provider, errPick := manager.pickNextMixed(context.Background(), []string{"gemini", "claude"}, "", cliproxyexecutor.Options{}, nil)
+		got, _, provider, errPick := manager.pickNextMixed(context.Background(), []string{"gemini", "claude"}, "", cockpitexecutor.Options{}, nil)
 		if errPick != nil {
 			t.Fatalf("pickNextMixed() #%d error = %v", index, errPick)
 		}
@@ -426,7 +426,7 @@ func TestManager_PickNextMixed_SkipsProvidersWithoutExecutors(t *testing.T) {
 		t.Fatalf("Register(claude-a) error = %v", errRegister)
 	}
 
-	got, _, provider, errPick := manager.pickNextMixed(context.Background(), []string{"gemini", "claude"}, "", cliproxyexecutor.Options{}, nil)
+	got, _, provider, errPick := manager.pickNextMixed(context.Background(), []string{"gemini", "claude"}, "", cockpitexecutor.Options{}, nil)
 	if errPick != nil {
 		t.Fatalf("pickNextMixed() error = %v", errPick)
 	}
@@ -467,7 +467,7 @@ func TestManager_SchedulerTracksMarkResultCooldownAndRecovery(t *testing.T) {
 		Error:    &Error{HTTPStatus: 429, Message: "quota"},
 	})
 
-	got, errPick := manager.scheduler.pickSingle(context.Background(), "gemini", "test-model", cliproxyexecutor.Options{}, nil)
+	got, errPick := manager.scheduler.pickSingle(context.Background(), "gemini", "test-model", cockpitexecutor.Options{}, nil)
 	if errPick != nil {
 		t.Fatalf("scheduler.pickSingle() after cooldown error = %v", errPick)
 	}
@@ -484,7 +484,7 @@ func TestManager_SchedulerTracksMarkResultCooldownAndRecovery(t *testing.T) {
 
 	seen := make(map[string]struct{}, 2)
 	for index := 0; index < 2; index++ {
-		got, errPick = manager.scheduler.pickSingle(context.Background(), "gemini", "test-model", cliproxyexecutor.Options{}, nil)
+		got, errPick = manager.scheduler.pickSingle(context.Background(), "gemini", "test-model", cockpitexecutor.Options{}, nil)
 		if errPick != nil {
 			t.Fatalf("scheduler.pickSingle() after recovery #%d error = %v", index, errPick)
 		}

@@ -11,7 +11,7 @@ import (
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/nacos"
-	"github.com/coachpo/cockpit-backend/sdk/cliproxy"
+	"github.com/coachpo/cockpit-backend/sdk/cockpit"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -19,7 +19,7 @@ import (
 // It creates a new proxy service instance, sets up signal handling for graceful shutdown,
 // and starts the service with the provided configuration.
 func StartService(cfg *config.Config, configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) {
-	builder := cliproxy.NewBuilder().
+	builder := cockpit.NewBuilder().
 		WithConfig(cfg).
 		WithConfigSource(configSource).
 		WithAuthStore(authStore)
@@ -42,7 +42,7 @@ func StartService(cfg *config.Config, configSource nacos.ConfigSource, authStore
 // StartServiceBackground starts the proxy service in a background goroutine
 // and returns a cancel function for shutdown and a done channel.
 func StartServiceBackground(cfg *config.Config, configSource nacos.ConfigSource, authStore nacos.WatchableAuthStore) (cancel func(), done <-chan struct{}) {
-	builder := cliproxy.NewBuilder().
+	builder := cockpit.NewBuilder().
 		WithConfig(cfg).
 		WithConfigSource(configSource).
 		WithAuthStore(authStore)

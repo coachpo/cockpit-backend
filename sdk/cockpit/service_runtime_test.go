@@ -1,4 +1,4 @@
-package cliproxy
+package cockpit
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/watcher"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 func TestWSOnConnected_SkipsAIStudioRuntimeAuth(t *testing.T) {

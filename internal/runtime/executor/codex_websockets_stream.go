@@ -8,14 +8,14 @@ import (
 	"strings"
 
 	"github.com/coachpo/cockpit-backend/internal/thinking"
-	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	sdktranslator "github.com/coachpo/cockpit-backend/sdk/translator"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 )
 
-func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (_ *cliproxyexecutor.StreamResult, err error) {
+func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *cockpitauth.Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (_ *cockpitexecutor.StreamResult, err error) {
 	log.Debugf("Executing Codex Websockets stream request with auth ID: %s, model: %s", auth.ID, req.Model)
 	if ctx == nil {
 		ctx = context.Background()
@@ -123,7 +123,7 @@ func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *clipr
 		}
 	}
 
-	out := make(chan cliproxyexecutor.StreamChunk)
+	out := make(chan cockpitexecutor.StreamChunk)
 	go func() {
 		terminateReason := "completed"
 		var terminateErr error
@@ -141,7 +141,7 @@ func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *clipr
 			}
 		}()
 
-		send := func(chunk cliproxyexecutor.StreamChunk) bool {
+		send := func(chunk cockpitexecutor.StreamChunk) bool {
 			if ctx == nil {
 				out <- chunk
 				return true
@@ -159,7 +159,7 @@ func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *clipr
 			if ctx != nil && ctx.Err() != nil {
 				terminateReason = "context_done"
 				terminateErr = ctx.Err()
-				_ = send(cliproxyexecutor.StreamChunk{Err: ctx.Err()})
+				_ = send(cockpitexecutor.StreamChunk{Err: ctx.Err()})
 				return
 			}
 			msgType, payload, errRead := readCodexWebsocketMessage(ctx, sess, conn, readCh)
@@ -167,13 +167,13 @@ func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *clipr
 				if sess != nil && ctx != nil && ctx.Err() != nil {
 					terminateReason = "context_done"
 					terminateErr = ctx.Err()
-					_ = send(cliproxyexecutor.StreamChunk{Err: ctx.Err()})
+					_ = send(cockpitexecutor.StreamChunk{Err: ctx.Err()})
 					return
 				}
 				terminateReason = "read_error"
 				terminateErr = errRead
 				reporter.publishFailure(ctx)
-				_ = send(cliproxyexecutor.StreamChunk{Err: errRead})
+				_ = send(cockpitexecutor.StreamChunk{Err: errRead})
 				return
 			}
 			if msgType != websocket.TextMessage {
@@ -185,7 +185,7 @@ func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *clipr
 					if sess != nil {
 						e.invalidateUpstreamConn(sess, conn, "unexpected_binary", err)
 					}
-					_ = send(cliproxyexecutor.StreamChunk{Err: err})
+					_ = send(cockpitexecutor.StreamChunk{Err: err})
 					return
 				}
 				continue
@@ -202,7 +202,7 @@ func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *clipr
 				if sess != nil {
 					e.invalidateUpstreamConn(sess, conn, "upstream_error", wsErr)
 				}
-				_ = send(cliproxyexecutor.StreamChunk{Err: wsErr})
+				_ = send(cockpitexecutor.StreamChunk{Err: wsErr})
 				return
 			}
 
@@ -215,7 +215,7 @@ func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *clipr
 			line := encodeCodexWebsocketAsSSE(payload)
 			chunks := sdktranslator.TranslateStream(ctx, to, from, req.Model, body, body, line, &param)
 			for i := range chunks {
-				if !send(cliproxyexecutor.StreamChunk{Payload: []byte(chunks[i])}) {
+				if !send(cockpitexecutor.StreamChunk{Payload: []byte(chunks[i])}) {
 					terminateReason = "context_done"
 					terminateErr = ctx.Err()
 					return
@@ -227,5 +227,5 @@ func (e *CodexWebsocketsExecutor) ExecuteStream(ctx context.Context, auth *clipr
 		}
 	}()
 
-	return &cliproxyexecutor.StreamResult{Headers: upstreamHeaders, Chunks: out}, nil
+	return &cockpitexecutor.StreamResult{Headers: upstreamHeaders, Chunks: out}, nil
 }

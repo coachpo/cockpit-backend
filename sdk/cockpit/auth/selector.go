@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/coachpo/cockpit-backend/internal/thinking"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 )
 
 // RoundRobinSelector provides a simple provider scoped round-robin selection strategy.
@@ -170,7 +170,7 @@ func preferCodexWebsocketAuths(ctx context.Context, provider string, available [
 	if len(available) == 0 {
 		return available
 	}
-	if !cliproxyexecutor.DownstreamWebsocket(ctx) {
+	if !cockpitexecutor.DownstreamWebsocket(ctx) {
 		return available
 	}
 	if !strings.EqualFold(strings.TrimSpace(provider), "codex") {
@@ -248,7 +248,7 @@ func getAvailableAuths(auths []*Auth, provider, model string, now time.Time) ([]
 }
 
 // Pick selects the next available auth for the provider in a round-robin manner.
-func (s *RoundRobinSelector) Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth) (*Auth, error) {
+func (s *RoundRobinSelector) Pick(ctx context.Context, provider, model string, opts cockpitexecutor.Options, auths []*Auth) (*Auth, error) {
 	_ = opts
 	now := time.Now()
 	available, err := getAvailableAuths(auths, provider, model, now)
@@ -284,7 +284,7 @@ func (s *RoundRobinSelector) ensureCursorKey(key string, limit int) {
 }
 
 // Pick selects the first available auth for the provider in a deterministic manner.
-func (s *FillFirstSelector) Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth) (*Auth, error) {
+func (s *FillFirstSelector) Pick(ctx context.Context, provider, model string, opts cockpitexecutor.Options, auths []*Auth) (*Auth, error) {
 	_ = opts
 	now := time.Now()
 	available, err := getAvailableAuths(auths, provider, model, now)

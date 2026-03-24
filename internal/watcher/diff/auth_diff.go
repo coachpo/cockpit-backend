@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 // BuildAuthChangeDetails computes a redacted, human-readable list of auth field changes.

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/sjson"
@@ -88,11 +88,11 @@ func (e statusErrWithHeaders) Headers() http.Header {
 	return e.headers.Clone()
 }
 
-func executionSessionIDFromOptions(opts cliproxyexecutor.Options) string {
+func executionSessionIDFromOptions(opts cockpitexecutor.Options) string {
 	if len(opts.Metadata) == 0 {
 		return ""
 	}
-	raw, ok := opts.Metadata[cliproxyexecutor.ExecutionSessionMetadataKey]
+	raw, ok := opts.Metadata[cockpitexecutor.ExecutionSessionMetadataKey]
 	if !ok || raw == nil {
 		return ""
 	}
@@ -114,7 +114,7 @@ func (e *CodexWebsocketsExecutor) CloseExecutionSession(sessionID string) {
 	if sessionID == "" {
 		return
 	}
-	if sessionID == cliproxyauth.CloseAllExecutionSessionsID {
+	if sessionID == cockpitauth.CloseAllExecutionSessionsID {
 		e.closeAllExecutionSessions("executor_replaced")
 		return
 	}

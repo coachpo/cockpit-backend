@@ -17,7 +17,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/registry"
 	_ "github.com/coachpo/cockpit-backend/internal/translator"
 	"github.com/coachpo/cockpit-backend/internal/util"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 	log "github.com/sirupsen/logrus"
 )
 

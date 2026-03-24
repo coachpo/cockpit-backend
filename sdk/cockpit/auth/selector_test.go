@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 )
 
 func TestFillFirstSelectorPick_Deterministic(t *testing.T) {
@@ -22,7 +22,7 @@ func TestFillFirstSelectorPick_Deterministic(t *testing.T) {
 		{ID: "c"},
 	}
 
-	got, err := selector.Pick(context.Background(), "gemini", "", cliproxyexecutor.Options{}, auths)
+	got, err := selector.Pick(context.Background(), "gemini", "", cockpitexecutor.Options{}, auths)
 	if err != nil {
 		t.Fatalf("Pick() error = %v", err)
 	}
@@ -46,7 +46,7 @@ func TestRoundRobinSelectorPick_CyclesDeterministic(t *testing.T) {
 
 	want := []string{"a", "b", "c", "a", "b"}
 	for i, id := range want {
-		got, err := selector.Pick(context.Background(), "gemini", "", cliproxyexecutor.Options{}, auths)
+		got, err := selector.Pick(context.Background(), "gemini", "", cockpitexecutor.Options{}, auths)
 		if err != nil {
 			t.Fatalf("Pick() #%d error = %v", i, err)
 		}
@@ -71,7 +71,7 @@ func TestRoundRobinSelectorPick_PriorityBuckets(t *testing.T) {
 
 	want := []string{"a", "b", "a", "b"}
 	for i, id := range want {
-		got, err := selector.Pick(context.Background(), "mixed", "", cliproxyexecutor.Options{}, auths)
+		got, err := selector.Pick(context.Background(), "mixed", "", cockpitexecutor.Options{}, auths)
 		if err != nil {
 			t.Fatalf("Pick() #%d error = %v", i, err)
 		}
@@ -110,7 +110,7 @@ func TestFillFirstSelectorPick_PriorityFallbackCooldown(t *testing.T) {
 	}
 	low := &Auth{ID: "low", Attributes: map[string]string{"priority": "0"}}
 
-	got, err := selector.Pick(context.Background(), "mixed", model, cliproxyexecutor.Options{}, []*Auth{high, low})
+	got, err := selector.Pick(context.Background(), "mixed", model, cockpitexecutor.Options{}, []*Auth{high, low})
 	if err != nil {
 		t.Fatalf("Pick() error = %v", err)
 	}
@@ -142,7 +142,7 @@ func TestRoundRobinSelectorPick_Concurrent(t *testing.T) {
 			defer wg.Done()
 			<-start
 			for j := 0; j < iterations; j++ {
-				got, err := selector.Pick(context.Background(), "gemini", "", cliproxyexecutor.Options{}, auths)
+				got, err := selector.Pick(context.Background(), "gemini", "", cockpitexecutor.Options{}, auths)
 				if err != nil {
 					select {
 					case errCh <- err:
@@ -219,7 +219,7 @@ func TestSelectorPick_AllCooldownReturnsModelCooldownError(t *testing.T) {
 		t.Parallel()
 
 		selector := &FillFirstSelector{}
-		_, err := selector.Pick(context.Background(), "mixed", model, cliproxyexecutor.Options{}, auths)
+		_, err := selector.Pick(context.Background(), "mixed", model, cockpitexecutor.Options{}, auths)
 		if err == nil {
 			t.Fatalf("Pick() error = nil")
 		}
@@ -257,7 +257,7 @@ func TestSelectorPick_AllCooldownReturnsModelCooldownError(t *testing.T) {
 		t.Parallel()
 
 		selector := &FillFirstSelector{}
-		_, err := selector.Pick(context.Background(), "gemini", model, cliproxyexecutor.Options{}, auths)
+		_, err := selector.Pick(context.Background(), "gemini", model, cockpitexecutor.Options{}, auths)
 		if err == nil {
 			t.Fatalf("Pick() error = nil")
 		}
@@ -339,7 +339,7 @@ func TestFillFirstSelectorPick_ThinkingSuffixFallsBackToBaseModelState(t *testin
 		Attributes: map[string]string{"priority": "0"},
 	}
 
-	got, err := selector.Pick(context.Background(), "mixed", requestedModel, cliproxyexecutor.Options{}, []*Auth{high, low})
+	got, err := selector.Pick(context.Background(), "mixed", requestedModel, cockpitexecutor.Options{}, []*Auth{high, low})
 	if err != nil {
 		t.Fatalf("Pick() error = %v", err)
 	}
@@ -360,11 +360,11 @@ func TestRoundRobinSelectorPick_ThinkingSuffixSharesCursor(t *testing.T) {
 		{ID: "a"},
 	}
 
-	first, err := selector.Pick(context.Background(), "gemini", "test-model(high)", cliproxyexecutor.Options{}, auths)
+	first, err := selector.Pick(context.Background(), "gemini", "test-model(high)", cockpitexecutor.Options{}, auths)
 	if err != nil {
 		t.Fatalf("Pick() first error = %v", err)
 	}
-	second, err := selector.Pick(context.Background(), "gemini", "test-model(low)", cliproxyexecutor.Options{}, auths)
+	second, err := selector.Pick(context.Background(), "gemini", "test-model(low)", cockpitexecutor.Options{}, auths)
 	if err != nil {
 		t.Fatalf("Pick() second error = %v", err)
 	}
@@ -385,9 +385,9 @@ func TestRoundRobinSelectorPick_CursorKeyCap(t *testing.T) {
 	selector := &RoundRobinSelector{maxKeys: 2}
 	auths := []*Auth{{ID: "a"}}
 
-	_, _ = selector.Pick(context.Background(), "gemini", "m1", cliproxyexecutor.Options{}, auths)
-	_, _ = selector.Pick(context.Background(), "gemini", "m2", cliproxyexecutor.Options{}, auths)
-	_, _ = selector.Pick(context.Background(), "gemini", "m3", cliproxyexecutor.Options{}, auths)
+	_, _ = selector.Pick(context.Background(), "gemini", "m1", cockpitexecutor.Options{}, auths)
+	_, _ = selector.Pick(context.Background(), "gemini", "m2", cockpitexecutor.Options{}, auths)
+	_, _ = selector.Pick(context.Background(), "gemini", "m3", cockpitexecutor.Options{}, auths)
 
 	selector.mu.Lock()
 	defer selector.mu.Unlock()
@@ -425,7 +425,7 @@ func TestRoundRobinSelectorPick_IgnoresLegacyGeminiVirtualParentAttribute(t *tes
 	}
 
 	for i, expectedID := range want {
-		got, err := selector.Pick(context.Background(), "gemini-cli", "gemini-2.5-pro", cliproxyexecutor.Options{}, auths)
+		got, err := selector.Pick(context.Background(), "gemini-cli", "gemini-2.5-pro", cockpitexecutor.Options{}, auths)
 		if err != nil {
 			t.Fatalf("Pick() #%d error = %v", i, err)
 		}

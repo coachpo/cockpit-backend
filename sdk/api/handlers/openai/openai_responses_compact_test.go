@@ -11,8 +11,8 @@ import (
 	sdkconfig "github.com/coachpo/cockpit-backend/internal/config"
 	"github.com/coachpo/cockpit-backend/internal/registry"
 	"github.com/coachpo/cockpit-backend/sdk/api/handlers"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	coreexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
+	coreexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	"github.com/gin-gonic/gin"
 )
 

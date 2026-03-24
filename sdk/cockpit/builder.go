@@ -1,6 +1,6 @@
-// Package cliproxy provides the core service implementation for Cockpit.
+// Package cockpit provides the core service implementation for Cockpit.
 // and integration with various AI service providers through a unified interface.
-package cliproxy
+package cockpit
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/coachpo/cockpit-backend/internal/nacos"
 	sdkaccess "github.com/coachpo/cockpit-backend/sdk/access"
 	sdkAuth "github.com/coachpo/cockpit-backend/sdk/auth"
-	coreauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	coreauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
 )
 
 // Builder constructs a Service instance with customizable providers.

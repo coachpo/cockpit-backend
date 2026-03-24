@@ -8,15 +8,15 @@ import (
 	"strings"
 
 	"github.com/coachpo/cockpit-backend/internal/thinking"
-	cliproxyauth "github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitauth "github.com/coachpo/cockpit-backend/sdk/cockpit/auth"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	sdktranslator "github.com/coachpo/cockpit-backend/sdk/translator"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
-func (e *CodexWebsocketsExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (resp cliproxyexecutor.Response, err error) {
+func (e *CodexWebsocketsExecutor) Execute(ctx context.Context, auth *cockpitauth.Auth, req cockpitexecutor.Request, opts cockpitexecutor.Options) (resp cockpitexecutor.Response, err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -165,7 +165,7 @@ func (e *CodexWebsocketsExecutor) Execute(ctx context.Context, auth *cliproxyaut
 			}
 			var param any
 			out := sdktranslator.TranslateNonStream(ctx, to, from, req.Model, originalPayload, body, payload, &param)
-			resp = cliproxyexecutor.Response{Payload: []byte(out)}
+			resp = cockpitexecutor.Response{Payload: []byte(out)}
 			return resp, nil
 		}
 		_ = eventType

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/coachpo/cockpit-backend/internal/registry"
-	cliproxyexecutor "github.com/coachpo/cockpit-backend/sdk/cliproxy/executor"
+	cockpitexecutor "github.com/coachpo/cockpit-backend/sdk/cockpit/executor"
 	"github.com/google/uuid"
 )
 
@@ -73,12 +73,12 @@ func (e *credentialRetryLimitExecutor) Identifier() string {
 	return e.id
 }
 
-func (e *credentialRetryLimitExecutor) Execute(context.Context, *Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
+func (e *credentialRetryLimitExecutor) Execute(context.Context, *Auth, cockpitexecutor.Request, cockpitexecutor.Options) (cockpitexecutor.Response, error) {
 	e.recordCall()
-	return cliproxyexecutor.Response{}, &Error{HTTPStatus: 500, Message: "boom"}
+	return cockpitexecutor.Response{}, &Error{HTTPStatus: 500, Message: "boom"}
 }
 
-func (e *credentialRetryLimitExecutor) ExecuteStream(context.Context, *Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
+func (e *credentialRetryLimitExecutor) ExecuteStream(context.Context, *Auth, cockpitexecutor.Request, cockpitexecutor.Options) (*cockpitexecutor.StreamResult, error) {
 	e.recordCall()
 	return nil, &Error{HTTPStatus: 500, Message: "boom"}
 }
@@ -87,9 +87,9 @@ func (e *credentialRetryLimitExecutor) Refresh(_ context.Context, auth *Auth) (*
 	return auth, nil
 }
 
-func (e *credentialRetryLimitExecutor) CountTokens(context.Context, *Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
+func (e *credentialRetryLimitExecutor) CountTokens(context.Context, *Auth, cockpitexecutor.Request, cockpitexecutor.Options) (cockpitexecutor.Response, error) {
 	e.recordCall()
-	return cliproxyexecutor.Response{}, &Error{HTTPStatus: 500, Message: "boom"}
+	return cockpitexecutor.Response{}, &Error{HTTPStatus: 500, Message: "boom"}
 }
 
 func (e *credentialRetryLimitExecutor) HttpRequest(context.Context, *Auth, *http.Request) (*http.Response, error) {
@@ -141,7 +141,7 @@ func newCredentialRetryLimitTestManager(t *testing.T, maxRetryCredentials int) (
 }
 
 func TestManager_MaxRetryCredentials_LimitsCrossCredentialRetries(t *testing.T) {
-	request := cliproxyexecutor.Request{Model: "test-model"}
+	request := cockpitexecutor.Request{Model: "test-model"}
 	testCases := []struct {
 		name   string
 		invoke func(*Manager) error
@@ -149,21 +149,21 @@ func TestManager_MaxRetryCredentials_LimitsCrossCredentialRetries(t *testing.T) 
 		{
 			name: "execute",
 			invoke: func(m *Manager) error {
-				_, errExecute := m.Execute(context.Background(), []string{"claude"}, request, cliproxyexecutor.Options{})
+				_, errExecute := m.Execute(context.Background(), []string{"claude"}, request, cockpitexecutor.Options{})
 				return errExecute
 			},
 		},
 		{
 			name: "execute_count",
 			invoke: func(m *Manager) error {
-				_, errExecute := m.ExecuteCount(context.Background(), []string{"claude"}, request, cliproxyexecutor.Options{})
+				_, errExecute := m.ExecuteCount(context.Background(), []string{"claude"}, request, cockpitexecutor.Options{})
 				return errExecute
 			},
 		},
 		{
 			name: "execute_stream",
 			invoke: func(m *Manager) error {
-				_, errExecute := m.ExecuteStream(context.Background(), []string{"claude"}, request, cliproxyexecutor.Options{})
+				_, errExecute := m.ExecuteStream(context.Background(), []string{"claude"}, request, cockpitexecutor.Options{})
 				return errExecute
 			},
 		},
