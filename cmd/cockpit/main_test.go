@@ -80,22 +80,19 @@ func TestMainExitsNonZeroWhenBootstrapFails(t *testing.T) {
 	}
 }
 
-func TestNewCommandFlagSet_ExposesOnlyConfigFlag(t *testing.T) {
-	fs := newCommandFlagSet("cockpit")
-	if fs.Lookup("config") == nil {
-		t.Fatal("expected -config flag to exist")
-	}
-	flagNames := make([]string, 0)
-	fs.VisitAll(func(f *flag.Flag) {
-		flagNames = append(flagNames, f.Name)
-	})
-	if len(flagNames) != 1 || flagNames[0] != "config" {
-		t.Fatalf("expected only -config flag, got %v", flagNames)
+func TestNewCommandFlagSet_ExposesRuntimeOverrideFlags(t *testing.T) {
+	var options commandOptions
+	fs := newCommandFlagSet("cockpit", &options)
+	for _, flagName := range []string{"config", "host", "port"} {
+		if fs.Lookup(flagName) == nil {
+			t.Fatalf("expected -%s flag to exist", flagName)
+		}
 	}
 }
 
 func TestNewCommandFlagSet_ParsesConfigOverride(t *testing.T) {
-	fs := newCommandFlagSet("cockpit")
+	var options commandOptions
+	fs := newCommandFlagSet("cockpit", &options)
 	if err := fs.Parse([]string{"-config", "/tmp/custom-config.yaml"}); err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -103,6 +100,9 @@ func TestNewCommandFlagSet_ParsesConfigOverride(t *testing.T) {
 		t.Fatal("expected -config flag lookup after parse")
 	} else if got.Value.String() != "/tmp/custom-config.yaml" {
 		t.Fatalf("expected config flag value to be propagated, got %q", got.Value.String())
+	}
+	if options.configPath != "/tmp/custom-config.yaml" {
+		t.Fatalf("expected parsed config override, got %q", options.configPath)
 	}
 }
 
@@ -113,6 +113,58 @@ func TestParseCommandArgs_RejectsPositionalArgs(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unexpected positional arguments") {
 		t.Fatalf("expected positional-arg rejection, got %q", err)
+	}
+}
+
+func TestParseCommandArgs_ParsesRuntimeOverrides(t *testing.T) {
+	options, err := parseCommandArgs("cockpit", []string{"--config", "/tmp/custom-config.yaml", "--host", "0.0.0.0", "--port", "8080"})
+	if err != nil {
+		t.Fatalf("parseCommandArgs() error = %v", err)
+	}
+	if options.configPath != "/tmp/custom-config.yaml" {
+		t.Fatalf("expected config path override, got %q", options.configPath)
+	}
+	if !options.hostSet || options.host != "0.0.0.0" {
+		t.Fatalf("expected host override to be set, got host=%q hostSet=%v", options.host, options.hostSet)
+	}
+	if !options.portSet || options.port != 8080 {
+		t.Fatalf("expected port override to be set, got port=%d portSet=%v", options.port, options.portSet)
+	}
+}
+
+func TestParseCommandArgs_RejectsBlankHostOverride(t *testing.T) {
+	_, err := parseCommandArgs("cockpit", []string{"--host", "   "})
+	if err == nil {
+		t.Fatal("expected error for blank host override")
+	}
+	if !strings.Contains(err.Error(), "host flag") {
+		t.Fatalf("expected host validation error, got %q", err)
+	}
+}
+
+func TestParseCommandArgs_RejectsOutOfRangePortOverride(t *testing.T) {
+	_, err := parseCommandArgs("cockpit", []string{"--port", "70000"})
+	if err == nil {
+		t.Fatal("expected error for out-of-range port override")
+	}
+	if !strings.Contains(err.Error(), "port flag") {
+		t.Fatalf("expected port validation error, got %q", err)
+	}
+}
+
+func TestApplyRuntimeOverrides_OverridesOnlyProvidedValues(t *testing.T) {
+	cfg := &config.Config{Host: "127.0.0.1", Port: 8317}
+	if err := applyRuntimeOverrides(cfg, commandOptions{host: "0.0.0.0", hostSet: true}); err != nil {
+		t.Fatalf("applyRuntimeOverrides() host override error = %v", err)
+	}
+	if cfg.Host != "0.0.0.0" || cfg.Port != 8317 {
+		t.Fatalf("expected only host override to apply, got host=%q port=%d", cfg.Host, cfg.Port)
+	}
+	if err := applyRuntimeOverrides(cfg, commandOptions{port: 8080, portSet: true}); err != nil {
+		t.Fatalf("applyRuntimeOverrides() port override error = %v", err)
+	}
+	if cfg.Host != "0.0.0.0" || cfg.Port != 8080 {
+		t.Fatalf("expected both overrides to be preserved, got host=%q port=%d", cfg.Host, cfg.Port)
 	}
 }
 

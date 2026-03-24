@@ -26,14 +26,33 @@ import (
 
 const configPathUsage = "Runtime config path for internal bookkeeping (defaults to ./cockpit/config.yaml; configuration is loaded from Nacos)"
 
+const (
+	hostUsage = "HTTP host override for the management server listener"
+	portUsage = "HTTP port override for the management server listener"
+)
+
+type commandOptions struct {
+	configPath string
+	host       string
+	hostSet    bool
+	port       int
+	portSet    bool
+}
+
 // init initializes the shared logger setup.
 func init() {
 	logging.SetupBaseLogger()
 }
 
-func newCommandFlagSet(name string) *flag.FlagSet {
+func newCommandFlagSet(name string, options *commandOptions) *flag.FlagSet {
+	if options == nil {
+		options = &commandOptions{}
+	}
+
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.String("config", "", configPathUsage)
+	fs.StringVar(&options.configPath, "config", "", configPathUsage)
+	fs.StringVar(&options.host, "host", "", hostUsage)
+	fs.IntVar(&options.port, "port", 0, portUsage)
 	fs.Usage = func() {
 		out := fs.Output()
 		_, _ = fmt.Fprintf(out, "Usage of %s\n", name)
@@ -65,18 +84,61 @@ func newCommandFlagSet(name string) *flag.FlagSet {
 	return fs
 }
 
-func parseCommandArgs(name string, args []string) (string, error) {
-	fs := newCommandFlagSet(name)
+func parseCommandArgs(name string, args []string) (commandOptions, error) {
+	var options commandOptions
+	fs := newCommandFlagSet(name, &options)
 	if err := fs.Parse(args); err != nil {
-		return "", err
+		return commandOptions{}, err
 	}
 	if fs.NArg() > 0 {
-		return "", fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+		return commandOptions{}, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	if configPathFlag := fs.Lookup("config"); configPathFlag != nil {
-		return strings.TrimSpace(configPathFlag.Value.String()), nil
+
+	options.configPath = strings.TrimSpace(options.configPath)
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "host":
+			options.hostSet = true
+			options.host = strings.TrimSpace(options.host)
+		case "port":
+			options.portSet = true
+		}
+	})
+
+	if err := validateCommandOptions(options); err != nil {
+		return commandOptions{}, err
 	}
-	return "", nil
+
+	return options, nil
+}
+
+func validateCommandOptions(options commandOptions) error {
+	if options.hostSet && options.host == "" {
+		return fmt.Errorf("host flag requires a non-empty value")
+	}
+	if options.portSet && (options.port < 1 || options.port > 65535) {
+		return fmt.Errorf("port flag must be between 1 and 65535")
+	}
+
+	return nil
+}
+
+func applyRuntimeOverrides(cfg *config.Config, options commandOptions) error {
+	if cfg == nil {
+		return fmt.Errorf("runtime config is required")
+	}
+	if err := validateCommandOptions(options); err != nil {
+		return err
+	}
+
+	if options.hostSet {
+		cfg.Host = options.host
+	}
+	if options.portSet {
+		cfg.Port = options.port
+	}
+
+	return nil
 }
 
 type bootstrapConfig struct {
@@ -153,7 +215,7 @@ func validateBootstrapConfig(sourceName string, loaded *bootstrapConfig) error {
 // It parses command-line flags, loads configuration, and starts the appropriate
 // service based on the provided flags (login, codex-login, or server mode).
 func main() {
-	configFilePath, parseErr := parseCommandArgs(os.Args[0], os.Args[1:])
+	options, parseErr := parseCommandArgs(os.Args[0], os.Args[1:])
 	if parseErr != nil {
 		if errors.Is(parseErr, flag.ErrHelp) {
 			return
@@ -161,6 +223,7 @@ func main() {
 		log.Errorf("failed to parse command line flags: %v", parseErr)
 		os.Exit(2)
 	}
+	configFilePath := options.configPath
 
 	// Core application variables.
 	var err error
@@ -192,6 +255,10 @@ func main() {
 	cfg := loaded.cfg
 	configSource := loaded.configSource
 	authStore := loaded.authStore
+	if err = applyRuntimeOverrides(cfg, options); err != nil {
+		log.Errorf("failed to apply runtime flag overrides: %v", err)
+		os.Exit(2)
+	}
 	coreauth.SetQuotaCooldownDisabled(cfg.DisableCooling)
 
 	if err = logging.ConfigureLogOutput(cfg); err != nil {

@@ -109,6 +109,44 @@ func TestManagementRetainedRouteIsAccessibleWithoutAuthorization(t *testing.T) {
 	}
 }
 
+func TestServerUsesConfiguredListenAddress(t *testing.T) {
+	server := newTestServer(t, func(cfg *proxyconfig.Config) {
+		cfg.Host = "0.0.0.0"
+		cfg.Port = 8080
+	})
+
+	if server.server == nil {
+		t.Fatal("expected underlying http server to be initialized")
+	}
+	if server.server.Addr != "0.0.0.0:8080" {
+		t.Fatalf("expected listen address 0.0.0.0:8080, got %q", server.server.Addr)
+	}
+}
+
+func TestCorsMiddlewareAllowsAllOrigins(t *testing.T) {
+	server := newTestServer(t, nil)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "/api/runtime-settings", nil)
+	req.Header.Set("Origin", "https://frontend.example")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type")
+	server.engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected CORS preflight status %d, got %d with body %s", http.StatusNoContent, rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("expected wildcard allow-origin header, got %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, http.MethodGet) {
+		t.Fatalf("expected allow-methods header to include %s, got %q", http.MethodGet, got)
+	}
+	if got := strings.ToLower(rec.Header().Get("Access-Control-Allow-Headers")); got != "*" && !strings.Contains(got, "authorization") {
+		t.Fatalf("expected allow-headers to include authorization or *, got %q", got)
+	}
+}
+
 func TestManagementRetainedRouteIgnoresManagementPasswordEnv(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "secret")
 

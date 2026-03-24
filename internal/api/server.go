@@ -20,6 +20,7 @@ import (
 	sdkaccess "github.com/coachpo/cockpit-backend/sdk/access"
 	"github.com/coachpo/cockpit-backend/sdk/api/handlers"
 	"github.com/coachpo/cockpit-backend/sdk/cliproxy/auth"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
@@ -253,18 +254,27 @@ func (s *Server) Stop(ctx context.Context) error {
 // Returns:
 //   - gin.HandlerFunc: The CORS middleware handler
 func corsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "*")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-
-		c.Next()
-	}
+	return cors.New(cors.Config{
+		AllowAllOrigins: true,
+		AllowMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodHead,
+			http.MethodOptions,
+		},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Length",
+			"Content-Type",
+			"Authorization",
+			"Accept",
+			"Accept-Encoding",
+			"X-Requested-With",
+		},
+	})
 }
 
 // (management handlers moved to internal/api/handlers/management)
