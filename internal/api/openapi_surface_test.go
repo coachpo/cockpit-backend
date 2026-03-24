@@ -125,6 +125,8 @@ func TestOpenAPIDocAuthFileSchemaDropsLegacyProbe(t *testing.T) {
 	for _, banned := range []string{
 		"usage_probe:",
 		"prefix:",
+		"source:",
+		"enum: [nacos, file, memory]",
 	} {
 		if strings.Contains(section, banned) {
 			t.Fatalf("did not expect %q in AuthFile schema: %s", banned, section)
