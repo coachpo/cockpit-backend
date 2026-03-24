@@ -3,7 +3,7 @@
 Parent: `internal/watcher/AGENTS.md`
 
 ## OVERVIEW
-Runtime auth synthesis layer. This folder turns config-backed sources into `sdk/cliproxy/auth.Auth` entries for watcher dispatch.
+Runtime auth synthesis layer. This folder turns config-backed sources into `sdk/cockpit/auth.Auth` entries for watcher dispatch.
 
 ## WHERE TO LOOK
 - `config.go`: config-backed auth generation.

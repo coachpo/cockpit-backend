@@ -1,4 +1,4 @@
-# sdk/cliproxy
+# sdk/cockpit
 
 Parent: `sdk/AGENTS.md`
 
@@ -25,5 +25,5 @@ Primary embed surface for running Cockpit as a library. `Builder` assembles conf
 
 ## CHECKS
 ```bash
-go test ./sdk/cliproxy/...
+go test ./sdk/cockpit/...
 ```

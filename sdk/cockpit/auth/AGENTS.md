@@ -1,6 +1,6 @@
-# sdk/cliproxy/auth
+# sdk/cockpit/auth
 
-Parent: `sdk/cliproxy/AGENTS.md`
+Parent: `sdk/cockpit/AGENTS.md`
 
 ## OVERVIEW
 Runtime auth conductor. Owns executor registration, auth selection, cooldowns, refresh scheduling, execution-model candidate prep, and persistence policy hooks.
@@ -26,5 +26,5 @@ Runtime auth conductor. Owns executor registration, auth selection, cooldowns, r
 
 ## CHECKS
 ```bash
-go test ./sdk/cliproxy/auth/...
+go test ./sdk/cockpit/auth/...
 ```

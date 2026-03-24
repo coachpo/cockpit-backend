@@ -15,7 +15,7 @@ Websocket relay manager that bridges HTTP-like requests over provider sessions f
 - Provider names are normalized to lowercase, and a new connection replaces the older session for the same provider.
 - Message IDs are mandatory; request/response correlation lives on those IDs.
 - Disconnects must clean up waiting callers and trigger the configured disconnect hook.
-- Keep websocket path and upgrade behavior aligned with how `sdk/cliproxy/service.go` wires the gateway.
+- Keep websocket path and upgrade behavior aligned with how `sdk/cockpit/service.go` wires the gateway.
 
 ## CHECKS
 ```bash

@@ -6,7 +6,7 @@ Parent: `../AGENTS.md`
 Public, embeddable surface. This tree is what downstream tools should depend on instead of `internal/`.
 
 ## WHERE TO LOOK
-- `cliproxy/`: service lifecycle, builder, watcher hookup, model registration.
+- `cockpit/`: service lifecycle, builder, watcher hookup, model registration.
 - `access/`: inbound request-auth provider registry and manager.
 - `api/handlers/`: reusable HTTP handler layer.
 - `auth/`: authenticator contracts and Codex login helpers.
@@ -16,7 +16,7 @@ Public, embeddable surface. This tree is what downstream tools should depend on 
 ## LOCAL CONVENTIONS
 - Public API changes should ripple into external docs/help-site guidance and package tests when those docs exist; this checkout has no tracked README tree.
 - Keep reusable contracts here even if internals have richer implementations.
-- Keep request gating in `access/`; keep login/token-store concerns in `auth/`; keep runtime auth selection and cooldown logic in `cliproxy/auth/`.
+- Keep request gating in `access/`; keep login/token-store concerns in `auth/`; keep runtime auth selection and cooldown logic in `cockpit/auth/`.
 - Keep thin helper packages thin; do not move runtime-only behavior into `proxyutil/`.
 - If a subfolder has its own child `AGENTS.md`, switch to it for local rules.
 

@@ -15,7 +15,7 @@ Config and auth source abstraction layer. This package supplies the Nacos-backed
 - Hash plaintext remote-management secrets before publishing remote config.
 - Avoid duplicate watch notifications by comparing checksums and normalized entry state before invoking callbacks.
 - Nacos data IDs are stable API: `proxy-config` for config and `auth-credentials` for auth metadata.
-- Bootstrap chooses stores in `cmd/cockpit/main.go`; service defaults live in `sdk/cliproxy/builder.go`. Keep both sides aligned on the Nacos-only contract.
+- Bootstrap chooses stores in `cmd/cockpit/main.go`; service defaults live in `sdk/cockpit/builder.go`. Keep both sides aligned on the Nacos-only contract.
 
 ## CHECKS
 ```bash
