@@ -445,6 +445,9 @@ func TestListAuthFiles_ExposesUsageSubscriptionAndActiveFallback(t *testing.T) {
 	if !file.UsageAvailable {
 		t.Fatalf("expected usage_available=true, got %#v", file)
 	}
+	if strings.Contains(rec.Body.String(), "\"source\"") {
+		t.Fatalf("did not expect source in list response, got %s", rec.Body.String())
+	}
 	if strings.Contains(rec.Body.String(), "usage_probe") {
 		t.Fatalf("did not expect usage_probe in list response, got %s", rec.Body.String())
 	}

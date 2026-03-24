@@ -161,6 +161,9 @@ func TestListAuthFiles_UsesStoreMetadataWhenManagerUnavailable(t *testing.T) {
 		t.Fatalf("expected store metadata in list response, got %#v", item)
 	}
 	body := rec.Body.String()
+	if strings.Contains(body, "\"source\"") {
+		t.Fatalf("did not expect source in list response, got %s", body)
+	}
 	if strings.Contains(body, "hello") || strings.Contains(body, "team-a") {
 		t.Fatalf("did not expect prefix/note in list response, got %s", body)
 	}

@@ -58,12 +58,11 @@ func (h *Handler) listAuthFilesFromStore(c *gin.Context) {
 	files := make([]gin.H, 0, len(items))
 	for _, item := range items {
 		entry := gin.H{
-			"id":     item.ID,
-			"name":   item.Name,
-			"type":   item.Type,
-			"email":  item.Email,
-			"size":   item.Size,
-			"source": item.Source,
+			"id":    item.ID,
+			"name":  item.Name,
+			"type":  item.Type,
+			"email": item.Email,
+			"size":  item.Size,
 		}
 		if !item.ModTime.IsZero() {
 			entry["modtime"] = item.ModTime
@@ -133,11 +132,9 @@ func (h *Handler) buildAuthFileEntry(auth *coreauth.Auth, metadataByName map[str
 		"disabled":       auth.Disabled,
 		"unavailable":    auth.Unavailable,
 		"runtime_only":   runtimeOnly,
-		"source":         "memory",
 		"size":           int64(0),
 	}
 	if item, ok := metadataByName[name]; ok {
-		entry["source"] = item.Source
 		entry["size"] = item.Size
 		if !item.ModTime.IsZero() {
 			entry["modtime"] = item.ModTime
