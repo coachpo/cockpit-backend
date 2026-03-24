@@ -13,6 +13,7 @@ func (s *Server) registerManagementRoutes() {
 	log.Info("management routes registered")
 
 	mgmt := s.engine.Group("/api")
+	mgmt.Use(ManagementAuthMiddleware())
 	{
 		mgmt.GET("/runtime-settings", s.mgmt.GetRuntimeSettings)
 		mgmt.PUT("/runtime-settings", s.mgmt.PutRuntimeSettings)

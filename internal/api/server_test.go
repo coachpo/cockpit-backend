@@ -61,6 +61,10 @@ func performManagementRequest(server *Server, route managementRouteCase, authHea
 	return rec
 }
 
+func managementBearerHeader(token string) string {
+	return "Bearer " + token
+}
+
 func routeKey(method, path string) string {
 	return method + " " + path
 }
@@ -82,7 +86,9 @@ func sortedRouteKeys(routes map[string]struct{}) []string {
 	return keys
 }
 
-func TestManagementRetainedRouteIsAccessibleWithoutAuthorization(t *testing.T) {
+func TestManagementRetainedRouteRejectsMissingAuthorizationWhenPasswordConfigured(t *testing.T) {
+	t.Setenv("MANAGEMENT_PASSWORD", "secret")
+
 	server := newTestServer(t, nil)
 
 	rec := performManagementRequest(server, managementRouteCase{
@@ -90,8 +96,11 @@ func TestManagementRetainedRouteIsAccessibleWithoutAuthorization(t *testing.T) {
 		path:   "/api/runtime-settings",
 	}, "")
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected runtime-settings route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected runtime-settings route status %d, got %d with body %s", http.StatusUnauthorized, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Missing management bearer token") {
+		t.Fatalf("expected missing-token error body, got %s", rec.Body.String())
 	}
 }
 
@@ -133,7 +142,7 @@ func TestCorsMiddlewareAllowsAllOrigins(t *testing.T) {
 	}
 }
 
-func TestManagementRetainedRouteIgnoresManagementPasswordEnv(t *testing.T) {
+func TestManagementRetainedRouteRejectsInvalidAuthorizationWhenPasswordConfigured(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "secret")
 
 	server := newTestServer(t, nil)
@@ -141,10 +150,13 @@ func TestManagementRetainedRouteIgnoresManagementPasswordEnv(t *testing.T) {
 	rec := performManagementRequest(server, managementRouteCase{
 		method: http.MethodGet,
 		path:   "/api/runtime-settings",
-	}, "")
+	}, managementBearerHeader("wrong-secret"))
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected runtime-settings route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected runtime-settings route status %d, got %d with body %s", http.StatusUnauthorized, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Invalid management bearer token") {
+		t.Fatalf("expected invalid-token error body, got %s", rec.Body.String())
 	}
 	if got := rec.Header().Get("X-CPA-VERSION"); got != "" {
 		t.Fatalf("expected no X-CPA-VERSION header, got %q", got)
@@ -154,6 +166,21 @@ func TestManagementRetainedRouteIgnoresManagementPasswordEnv(t *testing.T) {
 	}
 	if got := rec.Header().Get("X-CPA-BUILD-DATE"); got != "" {
 		t.Fatalf("expected no X-CPA-BUILD-DATE header, got %q", got)
+	}
+}
+
+func TestManagementRetainedRouteAcceptsMatchingAuthorizationWhenPasswordConfigured(t *testing.T) {
+	t.Setenv("MANAGEMENT_PASSWORD", "secret")
+
+	server := newTestServer(t, nil)
+
+	rec := performManagementRequest(server, managementRouteCase{
+		method: http.MethodGet,
+		path:   "/api/runtime-settings",
+	}, managementBearerHeader("secret"))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected runtime-settings route status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 }
 

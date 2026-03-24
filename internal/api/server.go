@@ -28,6 +28,8 @@ import (
 
 const oauthCallbackSuccessHTML = `<html><head><meta charset="utf-8"><title>Authentication successful</title><script>setTimeout(function(){window.close();},5000);</script></head><body><h1>Authentication successful!</h1><p>You can close this window.</p><p>This window will close automatically in 5 seconds.</p></body></html>`
 
+const managementPasswordEnvKey = "MANAGEMENT_PASSWORD"
+
 // Server represents the main API server.
 // It encapsulates the Gin engine, HTTP server, handlers, and configuration.
 type Server struct {
@@ -300,5 +302,44 @@ func AuthMiddleware(manager *sdkaccess.Manager) gin.HandlerFunc {
 			log.Errorf("authentication middleware error: %v", err)
 		}
 		c.AbortWithStatusJSON(statusCode, gin.H{"error": err.Message})
+	}
+}
+
+func managementPassword() string {
+	value, ok := os.LookupEnv(managementPasswordEnvKey)
+	if !ok {
+		return ""
+	}
+
+	return strings.TrimSpace(value)
+}
+
+func ManagementAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == http.MethodOptions {
+			c.Next()
+			return
+		}
+
+		expectedPassword := managementPassword()
+		if expectedPassword == "" {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Management password is not configured"})
+			return
+		}
+
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		scheme, token, ok := strings.Cut(authHeader, " ")
+		token = strings.TrimSpace(token)
+		if !ok || !strings.EqualFold(strings.TrimSpace(scheme), "Bearer") || token == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing management bearer token"})
+			return
+		}
+
+		if token != expectedPassword {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid management bearer token"})
+			return
+		}
+
+		c.Next()
 	}
 }
