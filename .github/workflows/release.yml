@@ -138,7 +138,7 @@ jobs:
           echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
 
       - name: Download packaged assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -146,6 +146,7 @@ jobs:
       - name: Create or update release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
         run: |
           shopt -s nullglob
