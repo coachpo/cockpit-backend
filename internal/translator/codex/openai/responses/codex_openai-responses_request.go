@@ -132,4 +132,3 @@ func normalizeCodexBuiltinToolType(toolType string) string {
 		return ""
 	}
 }
-
