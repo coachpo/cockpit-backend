@@ -289,6 +289,56 @@ func TestCreateOAuthSession_IgnoresLegacyCallbackOriginAndUsesForwardedBackendOr
 	}
 }
 
+func TestCreateOAuthSession_LocalCallbackHelperSkipsBackendForwarder(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldStore := oauthSessions
+	oauthSessions = newOAuthSessionStore(oauthSessionTTL)
+	defer func() { oauthSessions = oldStore }()
+	oldForwarderFactory := startOAuthCallbackServer
+	defer func() { startOAuthCallbackServer = oldForwarderFactory }()
+	forwarderCalls := 0
+	startOAuthCallbackServer = func(port int, targetBase string) (*callbackForwarder, error) {
+		forwarderCalls++
+		done := make(chan struct{})
+		close(done)
+		return &callbackForwarder{done: done}, nil
+	}
+
+	h := NewHandlerWithoutConfigFilePath(&config.Config{}, nil)
+	h.authStore = &readonlyAuthStore{}
+
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "https://cockpit.example.com/api/oauth-sessions", strings.NewReader(`{"provider":"codex","local_callback_helper":true}`))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	h.CreateOAuthSession(ctx)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if forwarderCalls != 0 {
+		t.Fatalf("expected helper mode to skip backend forwarder startup, got %d call(s)", forwarderCalls)
+	}
+	var body struct {
+		State string `json:"state"`
+		URL   string `json:"url"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode create response: %v", err)
+	}
+	if body.State == "" || body.URL == "" {
+		t.Fatalf("expected oauth session response, got %+v", body)
+	}
+	session, err := LoadOAuthSession(body.State)
+	if err != nil {
+		t.Fatalf("expected stored oauth session, got %v", err)
+	}
+	if session.RedirectURI != codex.RedirectURI || session.Provider != "codex" || session.Status != oauthStatusPending {
+		t.Fatalf("unexpected stored session in helper mode: %+v", session)
+	}
+}
+
 func TestGetOAuthSessionStatus_ReturnsGoneForExpiredSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	oldStore := oauthSessions

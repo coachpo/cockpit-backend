@@ -45,7 +45,8 @@ var (
 )
 
 type oauthSessionCreateRequest struct {
-	Provider string `json:"provider"`
+	Provider            string `json:"provider"`
+	LocalCallbackHelper bool   `json:"local_callback_helper"`
 }
 
 func buildBackendCallbackURL(origin *url.URL) (string, error) {
@@ -232,21 +233,28 @@ func (h *Handler) CreateOAuthSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	forwarder, err := startOAuthCallbackServer(codexCallbackPort, backendCallbackURL)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start local callback listener"})
-		return
+	var forwarder *callbackForwarder
+	if !req.LocalCallbackHelper {
+		forwarder, err = startOAuthCallbackServer(codexCallbackPort, backendCallbackURL)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start local callback listener"})
+			return
+		}
 	}
 
 	pkceCodes, err := codex.GeneratePKCECodes()
 	if err != nil {
-		stopCallbackForwarderInstance(codexCallbackPort, forwarder)
+		if forwarder != nil {
+			stopCallbackForwarderInstance(codexCallbackPort, forwarder)
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate PKCE codes"})
 		return
 	}
 	state, err := misc.GenerateRandomState()
 	if err != nil {
-		stopCallbackForwarderInstance(codexCallbackPort, forwarder)
+		if forwarder != nil {
+			stopCallbackForwarderInstance(codexCallbackPort, forwarder)
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate state parameter"})
 		return
 	}
@@ -254,12 +262,16 @@ func (h *Handler) CreateOAuthSession(c *gin.Context) {
 	authClient := newCodexOAuthClient(h.cfg)
 	authURL, err := authClient.GenerateAuthURL(state, pkceCodes)
 	if err != nil {
-		stopCallbackForwarderInstance(codexCallbackPort, forwarder)
+		if forwarder != nil {
+			stopCallbackForwarderInstance(codexCallbackPort, forwarder)
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate authorization url"})
 		return
 	}
 	if err := RegisterOAuthSessionWithRedirect(state, provider, codex.RedirectURI, pkceCodes); err != nil {
-		stopCallbackForwarderInstance(codexCallbackPort, forwarder)
+		if forwarder != nil {
+			stopCallbackForwarderInstance(codexCallbackPort, forwarder)
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register oauth session"})
 		return
 	}
